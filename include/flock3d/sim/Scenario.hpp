@@ -27,6 +27,15 @@ struct EnvironmentSettings {
 struct ConstraintSettings {
     float max_speed{10.0F};
     float max_force{12.0F};
+    float gravity{0.0F};
+    float lift_strength{0.0F};
+    float altitude_target{0.0F};
+    float altitude_band{0.0F};
+    float altitude_correction_strength{0.0F};
+    float min_speed{0.0F};
+    float max_climb_rate{0.0F};
+    float max_turn_rate{0.0F};
+    float field_of_view_degrees{360.0F};
 };
 
 struct BehaviorSettings {

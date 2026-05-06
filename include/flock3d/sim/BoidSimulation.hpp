@@ -33,6 +33,11 @@ private:
     void spawn_random(std::uint32_t boid_count);
     void wrap_position(Vector3& position) const noexcept;
     void rebuild_spatial_hash();
+    [[nodiscard]] bool is_bird_flight() const noexcept;
+    [[nodiscard]] bool neighbor_in_field_of_view(Vector3 velocity, Vector3 offset) const noexcept;
+    [[nodiscard]] Vector3 bird_altitude_acceleration(Vector3 position) const noexcept;
+    [[nodiscard]] Vector3 enforce_min_speed(Vector3 velocity) const noexcept;
+    [[nodiscard]] Vector3 limit_turn_rate(Vector3 previous_velocity, Vector3 desired_velocity, float dt) const noexcept;
     [[nodiscard]] Vector3 seek(Vector3 position, Vector3 velocity, Vector3 target) const noexcept;
     void record_collective_metrics(SimulationMetrics& metrics) const noexcept;
 

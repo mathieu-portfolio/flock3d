@@ -61,6 +61,10 @@ struct SummaryStatistics {
     double mean_average_speed{};
     double mean_average_neighbors{};
     double mean_nearest_neighbor_distance{};
+    double mean_altitude{};
+    double mean_altitude_variance{};
+    double mean_stall_count{};
+    double mean_near_ground_count{};
     double total_duration_seconds{};
     std::size_t sample_count{};
 };
@@ -81,6 +85,10 @@ private:
     double average_speed_total_{};
     double average_neighbors_total_{};
     double nearest_neighbor_distance_total_{};
+    double altitude_total_{};
+    double altitude_variance_total_{};
+    double stall_count_total_{};
+    double near_ground_count_total_{};
 };
 
 class CsvMetricsWriter {

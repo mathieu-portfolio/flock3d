@@ -71,6 +71,15 @@ constexpr std::array<std::string_view, 7> scenario_cli_names{{
     definition.constraints = ConstraintSettings{
         definition.simulation_parameters.max_speed,
         definition.simulation_parameters.max_force,
+        definition.simulation_parameters.gravity,
+        definition.simulation_parameters.lift_strength,
+        definition.simulation_parameters.altitude_target,
+        definition.simulation_parameters.altitude_band,
+        definition.simulation_parameters.altitude_correction_strength,
+        definition.simulation_parameters.min_speed,
+        definition.simulation_parameters.max_climb_rate,
+        definition.simulation_parameters.max_turn_rate,
+        definition.simulation_parameters.field_of_view_degrees,
     };
     definition.behavior = BehaviorSettings{
         definition.simulation_parameters.separation_weight,
@@ -88,6 +97,15 @@ void sync_plain_settings_to_parameters(ScenarioDefinition& definition) noexcept
     definition.simulation_parameters.world_half_extent = definition.environment.world_half_extent;
     definition.simulation_parameters.max_speed = definition.constraints.max_speed;
     definition.simulation_parameters.max_force = definition.constraints.max_force;
+    definition.simulation_parameters.gravity = definition.constraints.gravity;
+    definition.simulation_parameters.lift_strength = definition.constraints.lift_strength;
+    definition.simulation_parameters.altitude_target = definition.constraints.altitude_target;
+    definition.simulation_parameters.altitude_band = definition.constraints.altitude_band;
+    definition.simulation_parameters.altitude_correction_strength = definition.constraints.altitude_correction_strength;
+    definition.simulation_parameters.min_speed = definition.constraints.min_speed;
+    definition.simulation_parameters.max_climb_rate = definition.constraints.max_climb_rate;
+    definition.simulation_parameters.max_turn_rate = definition.constraints.max_turn_rate;
+    definition.simulation_parameters.field_of_view_degrees = definition.constraints.field_of_view_degrees;
     definition.simulation_parameters.separation_weight = definition.behavior.separation_weight;
     definition.simulation_parameters.alignment_weight = definition.behavior.alignment_weight;
     definition.simulation_parameters.cohesion_weight = definition.behavior.cohesion_weight;
@@ -107,9 +125,22 @@ ScenarioDefinition build_scenario(ScenarioType type) noexcept
         break;
     case ScenarioType::BirdFlight:
         definition.display_name = "Bird Flight";
-        definition.description = "Placeholder for future avian flight constraints; currently reuses classic boids behavior.";
+        definition.description = "Flocking with gravity, lift, altitude hold, limited climb rate, turn rate, and forward field of view.";
+        definition.simulation_parameters.model = SimulationModel::BirdFlight;
         definition.simulation_parameters.random_seed = 2401U;
+        definition.simulation_parameters.min_initial_speed = 5.0F;
+        definition.simulation_parameters.max_initial_speed = 9.0F;
         definition.constraints.max_speed = 12.0F;
+        definition.constraints.max_force = 16.0F;
+        definition.constraints.gravity = 9.8F;
+        definition.constraints.lift_strength = 9.8F;
+        definition.constraints.altitude_target = 12.0F;
+        definition.constraints.altitude_band = 4.0F;
+        definition.constraints.altitude_correction_strength = 1.8F;
+        definition.constraints.min_speed = 4.0F;
+        definition.constraints.max_climb_rate = 6.0F;
+        definition.constraints.max_turn_rate = 120.0F;
+        definition.constraints.field_of_view_degrees = 220.0F;
         definition.behavior.alignment_weight = 1.25F;
         break;
     case ScenarioType::FishSchool:
