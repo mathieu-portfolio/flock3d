@@ -1,48 +1,135 @@
 {
   "version": 6,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 24,
-    "patch": 0
-  },
   "configurePresets": [
     {
-      "name": "default",
-      "displayName": "Default Debug",
-      "generator": "Ninja",
+      "name": "base",
+      "hidden": true,
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "BUILD_TESTING": "ON"
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug (default generator)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
       "name": "release",
-      "displayName": "Release",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}",
+      "displayName": "Release (default generator)",
+      "inherits": "base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "BUILD_TESTING": "ON"
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "debug-ninja",
+      "displayName": "Debug (Ninja)",
+      "inherits": "debug",
+      "generator": "Ninja"
+    },
+    {
+      "name": "release-ninja",
+      "displayName": "Release (Ninja)",
+      "inherits": "release",
+      "generator": "Ninja"
+    },
+    {
+      "name": "debug-vs2022",
+      "displayName": "Debug (VS2022 + vcpkg)",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release-vs2022",
+      "displayName": "Release (VS2022 + vcpkg)",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "default",
-      "configurePreset": "default"
+      "name": "debug",
+      "configurePreset": "debug"
     },
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "debug-ninja",
+      "configurePreset": "debug-ninja"
+    },
+    {
+      "name": "release-ninja",
+      "configurePreset": "release-ninja"
+    },
+    {
+      "name": "debug-vs2022",
+      "configurePreset": "debug-vs2022",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release-vs2022",
+      "configurePreset": "release-vs2022",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
     {
-      "name": "default",
-      "configurePreset": "default",
+      "name": "debug",
+      "configurePreset": "debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "debug-ninja",
+      "configurePreset": "debug-ninja",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release-ninja",
+      "configurePreset": "release-ninja",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "debug-vs2022",
+      "configurePreset": "debug-vs2022",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release-vs2022",
+      "configurePreset": "release-vs2022",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
