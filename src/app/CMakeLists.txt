@@ -2,6 +2,12 @@ set(flock3d_app_sources
     main.cpp
     Application.cpp
     Application.hpp
+    CameraController.cpp
+    CameraController.hpp
+    DebugControls.cpp
+    DebugControls.hpp
+    SimulationControls.cpp
+    SimulationControls.hpp
 )
 
 add_executable(flock3d ${flock3d_app_sources})
