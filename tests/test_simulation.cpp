@@ -109,8 +109,42 @@ TEST_CASE("BoidSimulation records neighbor metrics", "[simulation]")
     CHECK(metrics.neighbor_queries == 3);
     CHECK(metrics.neighbor_candidates == 5);
     CHECK(metrics.neighbor_total == 2);
+    CHECK(metrics.avg_candidates_per_query == Catch::Approx(5.0 / 3.0));
+    CHECK(metrics.max_candidates_per_query == 2);
+    CHECK(metrics.avg_effective_neighbors_per_query == Catch::Approx(2.0 / 3.0));
+    CHECK(metrics.max_effective_neighbors_per_query == 1);
     CHECK(metrics.average_neighbors_per_boid == 2.0F / 3.0F);
+    CHECK(metrics.spatial_cell_count == 2);
     CHECK(metrics.spatial_hash_cell_count == 2);
+    CHECK(metrics.avg_cell_occupancy == Catch::Approx(1.5));
+    CHECK(metrics.max_cell_occupancy == 2);
+}
+
+TEST_CASE("BoidSimulation counts candidates from visited hash cells", "[simulation][metrics]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.neighbor_radius = 1.0F;
+    parameters.separation_radius = 0.25F;
+    parameters.spatial_cell_size = 10.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{2.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{3.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.neighbor_queries == 3);
+    CHECK(metrics.neighbor_candidates == 9);
+    CHECK(metrics.neighbor_total == 2);
+    CHECK(metrics.avg_candidates_per_query == Catch::Approx(3.0));
+    CHECK(metrics.max_candidates_per_query == 3);
+    CHECK(metrics.avg_effective_neighbors_per_query == Catch::Approx(2.0 / 3.0));
+    CHECK(metrics.max_effective_neighbors_per_query == 1);
+    CHECK(metrics.spatial_cell_count == 1);
+    CHECK(metrics.avg_cell_occupancy == Catch::Approx(3.0));
+    CHECK(metrics.max_cell_occupancy == 3);
 }
 
 TEST_CASE("FixedTimestepAccumulator consumes deterministic 120 Hz steps", "[time]")

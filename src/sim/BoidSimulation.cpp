@@ -72,9 +72,10 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
         const Vector3 position = positions_[i];
         const Vector3 velocity = velocities_[i];
         const bool bird_flight = is_bird_flight();
-        spatial_hash_.query_neighbors(position, query_radius, neighbor_indices_);
+        NeighborQueryDiagnostics query_diagnostics{};
+        spatial_hash_.query_neighbors(position, query_radius, neighbor_indices_, query_diagnostics);
         if (metrics != nullptr) {
-            metrics->record_neighbor_query(neighbor_indices_.size());
+            metrics->record_neighbor_query(query_diagnostics.candidates_tested, query_diagnostics.visited_cells);
         }
 
         Vector3 separation_sum{};
@@ -170,7 +171,11 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
 
     if (metrics != nullptr) {
         record_collective_metrics(*metrics);
-        metrics->finish_simulation_step(positions_.size(), spatial_hash_.cell_count());
+        metrics->finish_simulation_step(
+            positions_.size(),
+            spatial_hash_.cell_count(),
+            spatial_hash_.average_cell_occupancy(),
+            spatial_hash_.max_cell_occupancy());
     }
 }
 

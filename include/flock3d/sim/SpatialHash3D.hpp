@@ -21,6 +21,11 @@ struct CellCoordHash {
     [[nodiscard]] std::size_t operator()(CellCoord coord) const noexcept;
 };
 
+struct NeighborQueryDiagnostics {
+    std::size_t visited_cells{};
+    std::size_t candidates_tested{};
+};
+
 class SpatialHash3D {
 public:
     explicit SpatialHash3D(float cell_size);
@@ -30,9 +35,17 @@ public:
 
     [[nodiscard]] std::vector<std::size_t> query_neighbors(Vector3 position, float radius) const;
     void query_neighbors(Vector3 position, float radius, std::vector<std::size_t>& result) const;
+    void query_neighbors(
+        Vector3 position,
+        float radius,
+        std::vector<std::size_t>& result,
+        NeighborQueryDiagnostics& diagnostics) const;
     [[nodiscard]] CellCoord cell_for(Vector3 position) const noexcept;
     [[nodiscard]] float cell_size() const noexcept { return cell_size_; }
     [[nodiscard]] std::size_t cell_count() const noexcept { return cells_.size(); }
+    [[nodiscard]] std::size_t max_cell_occupancy() const noexcept;
+    [[nodiscard]] double average_cell_occupancy() const noexcept;
+    [[nodiscard]] std::size_t total_entries() const noexcept;
 
 private:
     struct Entry {
