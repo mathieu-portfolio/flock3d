@@ -29,8 +29,10 @@ public:
     void insert(std::size_t boid_index, Vector3 position);
 
     [[nodiscard]] std::vector<std::size_t> query_neighbors(Vector3 position, float radius) const;
+    void query_neighbors(Vector3 position, float radius, std::vector<std::size_t>& result) const;
     [[nodiscard]] CellCoord cell_for(Vector3 position) const noexcept;
     [[nodiscard]] float cell_size() const noexcept { return cell_size_; }
+    [[nodiscard]] std::size_t cell_count() const noexcept { return cells_.size(); }
 
 private:
     struct Entry {

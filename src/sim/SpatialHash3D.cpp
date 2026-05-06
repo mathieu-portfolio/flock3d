@@ -44,8 +44,15 @@ void SpatialHash3D::insert(std::size_t boid_index, Vector3 position)
 std::vector<std::size_t> SpatialHash3D::query_neighbors(Vector3 position, float radius) const
 {
     std::vector<std::size_t> result;
+    query_neighbors(position, radius, result);
+    return result;
+}
+
+void SpatialHash3D::query_neighbors(Vector3 position, float radius, std::vector<std::size_t>& result) const
+{
+    result.clear();
     if (radius < 0.0F) {
-        return result;
+        return;
     }
 
     const auto center = cell_for(position);
@@ -69,8 +76,6 @@ std::vector<std::size_t> SpatialHash3D::query_neighbors(Vector3 position, float 
             }
         }
     }
-
-    return result;
 }
 
 CellCoord SpatialHash3D::cell_for(Vector3 position) const noexcept

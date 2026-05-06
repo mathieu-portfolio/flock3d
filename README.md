@@ -6,13 +6,15 @@
 
 - **Modern C++20** with small, focused translation units.
 - **Modular CMake + FetchContent** for cross-platform dependency management.
-- **raylib** rendering with a free 3D camera, FPS counter, and velocity-oriented boid tetrahedrons.
+- **raylib** rendering with a free 3D camera, compact debug overlay, FPS counter, and velocity-oriented boid tetrahedrons.
 - **Catch2** tests for spatial hashing, wrapping, and fixed-timestep behavior.
 - **Deterministic fixed timestep** simulation loop at 120 Hz.
 - **Simulation/rendering separation** so flock behavior can evolve without coupling to drawing code.
 - **Data-oriented SoA storage** for boid positions, velocities, and accelerations.
+- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, and boid count.
+- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, and neighbor-query behavior.
 - **Configurable directional boid scale** via simulation parameters.
-- **Uniform 3D spatial hash** skeleton for future neighbor queries.
+- **Uniform 3D spatial hash** for allocation-light neighbor queries during the simulation step.
 - **No ECS framework** and no unnecessary inheritance.
 
 ## Build instructions
@@ -96,16 +98,43 @@ Boids are a classic model of emergent flocking behavior. Each agent follows a fe
 2. **Alignment**: steer toward the average heading of neighbors.
 3. **Cohesion**: steer toward the center of nearby agents.
 
-`flock3d` currently includes the simulation and spatial-partitioning skeleton needed for those rules, but the full flocking forces are intentionally left as focused stubs for the next iteration.
+`flock3d` implements those local forces and exposes their weights at runtime so you can see how each rule changes the flock while watching the accompanying performance metrics.
 
 ## Controls
 
 - `W/A/S/D` + mouse: free camera controls through raylib.
+- `Space`: pause or resume fixed-timestep simulation updates.
+- `R`: reset the simulation with the current boid count and random seed.
+- `F1`: toggle the debug/metrics overlay.
+- `+` / `-` or keypad `+` / `-`: increase or decrease boid count in batches of 128.
+- `1` / `Shift+1`: increase or decrease separation weight.
+- `2` / `Shift+2`: increase or decrease alignment weight.
+- `3` / `Shift+3`: increase or decrease cohesion weight.
+- `4` / `Shift+4`: increase or decrease perception radius.
+- `5` / `Shift+5`: increase or decrease max speed.
 - `Esc`: close the window.
+
+## Debug overlay and metrics
+
+The `F1` overlay is intentionally compact and rendered with raylib text primitives so it can stay visible during performance experiments. It refreshes cached text at a low rate, or immediately after input changes, to avoid unnecessary formatting work every frame.
+
+Displayed metrics include:
+
+- **FPS and frame time**: current render-loop throughput and frame duration.
+- **Boid count**: active agents in the simulation after runtime adjustments.
+- **Average neighbors per boid**: effective flock neighbors, excluding the boid itself, divided by boid count for the latest fixed simulation step.
+- **Simulation update time**: wall-clock duration of the most recent fixed simulation update.
+- **Render time**: wall-clock duration of the most recent 3D draw pass.
+- **Spatial hash cell count**: occupied cells after the latest hash rebuild.
+- **Neighbor queries**: number of spatial neighbor queries issued by the latest fixed simulation step.
+- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, and max speed.
+
+## Screenshots
+
+Screenshots and capture notes for the debug overlay and larger flock scenarios will be added here as the visual sandbox evolves.
 
 ## Roadmap
 
-- Implement separation, alignment, and cohesion forces.
 - Add deterministic scenario fixtures for simulation regression tests.
 - Expand the spatial hash to support reusable neighbor buffers.
 - Add benchmarks for hash construction and simulation update passes.
