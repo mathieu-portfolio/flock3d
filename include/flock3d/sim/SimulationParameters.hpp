@@ -12,6 +12,11 @@ struct SimulationParameters {
     float max_initial_speed{8.0F};
     float max_speed{10.0F};
     float neighbor_radius{4.0F};
+    float separation_radius{2.0F};
+    float separation_weight{1.5F};
+    float alignment_weight{1.0F};
+    float cohesion_weight{1.0F};
+    float max_force{12.0F};
     float spatial_cell_size{4.0F};
     std::uint32_t random_seed{1337U};
 };

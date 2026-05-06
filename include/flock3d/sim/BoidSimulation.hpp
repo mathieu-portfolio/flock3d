@@ -28,10 +28,8 @@ public:
 private:
     void spawn_random(std::uint32_t boid_count);
     void wrap_position(Vector3& position) const noexcept;
-    void update_neighbors();
-    void apply_separation();
-    void apply_alignment();
-    void apply_cohesion();
+    void rebuild_spatial_hash();
+    [[nodiscard]] Vector3 seek(Vector3 position, Vector3 velocity, Vector3 target) const noexcept;
 
     SimulationParameters parameters_;
     SpatialHash3D spatial_hash_;

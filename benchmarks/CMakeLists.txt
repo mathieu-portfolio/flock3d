@@ -1,0 +1,5 @@
+add_executable(flock3d_neighbor_benchmark
+    neighbor_count_benchmark.cpp
+)
+target_link_libraries(flock3d_neighbor_benchmark PRIVATE flock3d::core)
+flock3d_enable_warnings(flock3d_neighbor_benchmark)
