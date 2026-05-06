@@ -15,6 +15,8 @@
 - **Scenario definitions** with display text, default simulation parameters, environment settings, constraints, behavior settings, metric settings, and deterministic seeds.
 - **Reproducible seed handling** so resetting a scenario with the same seed recreates the same initial boid positions and velocities.
 - **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, and collective-behavior order parameters.
+- **Sampled CSV metrics export** for reproducible experiments without per-frame dumps.
+- **Headless experiment runner** (`flock3d_experiment_runner`) for deterministic scripted runs and one-parameter sweeps without opening a raylib window.
 - **Configurable directional boid scale** via simulation parameters.
 - **Uniform 3D spatial hash** for allocation-light neighbor queries during the simulation step.
 - **No ECS framework** and no unnecessary inheritance.
@@ -70,10 +72,11 @@ include/flock3d/
   sim/      Public simulation headers for flock3d::core consumers.
   math/     Public lightweight Vector3 helpers used by simulation code.
 src/
-  app/      Window ownership, camera setup, and the fixed-timestep main loop.
-  sim/      Core simulation implementation and CMake target definition.
-  render/   raylib rendering implementation and CMake target definition.
-tests/      Catch2 coverage and test target definition.
+  app/         Window ownership, camera setup, and the fixed-timestep main loop.
+  sim/         Core simulation implementation and CMake target definition.
+  render/      raylib rendering implementation and CMake target definition.
+  experiment/  CSV metrics export and the headless experiment runner.
+tests/         Catch2 coverage and test target definition.
 ```
 
 CMake target ownership is intentionally local to each subdirectory: the root `CMakeLists.txt` configures the project, shared modules, and dependency fetching, while `src/sim`, `src/render`, `src/app`, and `tests` each declare the targets they own. Public core headers live under `include/flock3d` so external consumers can include stable paths such as:
@@ -130,7 +133,81 @@ Boids are a classic model of emergent flocking behavior. Each agent follows a fe
 - `Tab` / `Shift+Tab`: cycle the selected tunable parameter.
 - `Left` / `Right` or `[` / `]`: decrease or increase the selected tunable parameter.
 - `1`-`8`: select separation weight, alignment weight, cohesion weight, perception radius, separation radius, max speed, max force, or boid scale.
+- `O`: start or stop CSV metrics recording under `outputs/`.
+- `M`: cycle export mode when recording is stopped (`Summary`, `SampledTimeSeries`, placeholder `FullTrajectory`).
+- `PageUp` / `PageDown`: increase or decrease the sampled metrics rate when recording is stopped.
 - `Esc`: close the window.
+
+
+## Reproducible metrics export
+
+`flock3d` exports **sampled macroscopic metrics** rather than per-frame state dumps by default. The simulation can continue to advance at a fixed timestep such as 120 Hz while metrics are sampled at an independent rate such as 5 Hz. For example, with `fixed_dt = 1/120` and `sample_rate_hz = 5`, one CSV row is emitted every 0.2 seconds of simulation time. This keeps experiment files compact, emphasizes collective-behavior observables, and avoids tying scientific data volume to rendering framerate.
+
+CSV files are written under `outputs/` by the interactive app using timestamped filenames. The overlay shows whether recording is active, the selected export mode, the sample rate, and the current output filename.
+
+Supported export modes:
+
+- **SampledTimeSeries** (default): writes one row per sample containing scenario, seed, timestamp, git commit when available, sample rate, sample index, simulation time, boid count, polarization, cohesion, dispersion, average speed, average neighbors, nearest-neighbor distance, simulation update time, neighbor queries, spatial hash cell count, and optional sweep metadata.
+- **Summary**: samples at the same independent cadence but writes one aggregate row at the end of recording or at the end of a headless run. The aggregate records mean polarization, mean cohesion, max dispersion, mean speed, mean neighbors, and total duration in the shared CSV schema; `SummaryAggregator` also retains max polarization for code-level consumers.
+- **FullTrajectory**: declared as a placeholder for future full state export and intentionally not implemented yet.
+
+## Headless experiment runner
+
+The `flock3d_experiment_runner` executable reuses the scenario and simulation code without creating a raylib window. Runs are deterministic for the same scenario, seed, boid count, fixed timestep, duration, sample rate, export mode, and swept parameter value.
+
+Example sampled time-series run:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --scenario ClassicBoids \
+  --seed 123 \
+  --boids 2048 \
+  --duration 30 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode sampled \
+  --output outputs/classic_seed123.csv
+```
+
+Example summary run:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --scenario ClassicBoids \
+  --seed 123 \
+  --boids 2048 \
+  --duration 30 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode summary \
+  --output outputs/classic_seed123_summary.csv
+```
+
+One-parameter sweeps use inclusive `start:end:step` ranges. Only one `--sweep` argument is supported for now, and each output row includes `sweep_parameter` and `sweep_value` metadata.
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --scenario ClassicBoids \
+  --seed 123 \
+  --boids 1024 \
+  --duration 20 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode sampled \
+  --sweep perception_radius=5:30:5 \
+  --output outputs/perception_radius_sweep.csv
+
+./build/local/bin/flock3d_experiment_runner \
+  --scenario ClassicBoids \
+  --seed 123 \
+  --boids 1024 \
+  --duration 20 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode sampled \
+  --sweep alignment_weight=0:3:0.5 \
+  --output outputs/alignment_weight_sweep.csv
+```
 
 ## Debug overlay and metrics
 
@@ -163,7 +240,7 @@ Screenshots and capture notes for the debug overlay and larger flock scenarios w
 - Implement isolated bird-flight, fish-school, predator/prey, obstacle-avoidance, leadership, and noise behavior models.
 - Add deterministic scenario fixtures for simulation regression tests.
 - Define cluster-count connectivity semantics for scientific metrics.
-- Add CSV export for repeatable experiment runs.
+- Implement full-trajectory export when a compact trajectory schema is defined.
 - Expand the spatial hash to support reusable neighbor buffers.
 - Add benchmarks for hash construction and simulation update passes.
 - Explore instanced rendering for larger flocks.
