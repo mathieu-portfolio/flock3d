@@ -30,6 +30,11 @@ BoidSimulation::BoidSimulation(SimulationParameters parameters)
     reset(parameters_.boid_count);
 }
 
+void BoidSimulation::reset()
+{
+    reset(parameters_.boid_count);
+}
+
 void BoidSimulation::reset(std::uint32_t boid_count)
 {
     positions_.clear();
@@ -41,6 +46,13 @@ void BoidSimulation::reset(std::uint32_t boid_count)
     accelerations_.reserve(boid_count);
     neighbor_indices_.reserve(boid_count);
     spawn_random(boid_count);
+}
+
+void BoidSimulation::apply_parameters(const SimulationParameters& parameters)
+{
+    parameters_ = parameters;
+    spatial_hash_ = SpatialHash3D{parameters_.spatial_cell_size};
+    reset(parameters_.boid_count);
 }
 
 void BoidSimulation::update(float dt, SimulationMetrics* metrics)
@@ -68,6 +80,8 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
         Vector3 cohesion_sum{};
         std::size_t separation_count = 0;
         std::size_t flock_count = 0;
+        float nearest_neighbor_distance_squared = 0.0F;
+        bool has_nearest_neighbor = false;
 
         for (const std::size_t neighbor_index : neighbor_indices_) {
             if (neighbor_index == i) {
@@ -78,6 +92,11 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
             const float distance_squared = math::length_squared(offset);
             if (distance_squared <= 0.000001F) {
                 continue;
+            }
+
+            if (!has_nearest_neighbor || distance_squared < nearest_neighbor_distance_squared) {
+                nearest_neighbor_distance_squared = distance_squared;
+                has_nearest_neighbor = true;
             }
 
             if (distance_squared <= separation_radius_squared) {
@@ -103,6 +122,9 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
 
         if (metrics != nullptr) {
             metrics->record_effective_neighbors(flock_count);
+            if (has_nearest_neighbor) {
+                metrics->record_nearest_neighbor_distance(std::sqrt(nearest_neighbor_distance_squared));
+            }
         }
 
         if (flock_count > 0) {
@@ -126,6 +148,7 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
     }
 
     if (metrics != nullptr) {
+        record_collective_metrics(*metrics);
         metrics->finish_simulation_step(positions_.size(), spatial_hash_.cell_count());
     }
 }
@@ -183,6 +206,42 @@ void BoidSimulation::rebuild_spatial_hash()
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         spatial_hash_.insert(i, positions_[i]);
     }
+}
+
+void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const noexcept
+{
+    if (positions_.empty()) {
+        metrics.record_collective_behavior(0.0F, 0.0F, 0.0F, 0.0F);
+        return;
+    }
+
+    Vector3 center{};
+    Vector3 normalized_velocity_sum{};
+    double speed_total = 0.0;
+
+    for (std::size_t i = 0; i < positions_.size(); ++i) {
+        center = math::add(center, positions_[i]);
+        normalized_velocity_sum = math::add(normalized_velocity_sum, math::normalize_safe(velocities_[i]));
+        speed_total += static_cast<double>(math::length(velocities_[i]));
+    }
+
+    const auto boid_count = static_cast<float>(positions_.size());
+    center = math::scale(center, 1.0F / boid_count);
+
+    double distance_total = 0.0;
+    double distance_squared_total = 0.0;
+    for (const Vector3 position : positions_) {
+        const float distance_squared = math::length_squared(math::subtract(position, center));
+        const float distance = std::sqrt(distance_squared);
+        distance_total += static_cast<double>(distance);
+        distance_squared_total += static_cast<double>(distance_squared);
+    }
+
+    const float polarization = math::length(math::scale(normalized_velocity_sum, 1.0F / boid_count));
+    const float cohesion = static_cast<float>(distance_total / static_cast<double>(positions_.size()));
+    const float dispersion = static_cast<float>(std::sqrt(distance_squared_total / static_cast<double>(positions_.size())));
+    const float average_speed = static_cast<float>(speed_total / static_cast<double>(positions_.size()));
+    metrics.record_collective_behavior(polarization, cohesion, dispersion, average_speed);
 }
 
 Vector3 BoidSimulation::seek(Vector3 position, Vector3 velocity, Vector3 target) const noexcept

@@ -49,18 +49,18 @@ TEST_CASE("Debug overlay layout derives stable panel and selection geometry", "[
 {
     constexpr flock3d::app::OverlayLayout layout{};
 
-    CHECK(flock3d::app::overlay_panel_height(layout) == 488);
+    CHECK(flock3d::app::overlay_panel_height(layout) == 608);
 
     const auto panel = flock3d::app::overlay_panel_rect(layout);
     CHECK(panel.x == 2);
     CHECK(panel.y == 2);
-    CHECK(panel.width == 460);
-    CHECK(panel.height == 488);
+    CHECK(panel.width == 520);
+    CHECK(panel.height == 608);
 
     CHECK(
         flock3d::app::overlay_selected_parameter_line(layout, flock3d::app::TunableParameter::separation_weight)
-        == 15);
-    CHECK(flock3d::app::overlay_selected_parameter_line(layout, flock3d::app::TunableParameter::boid_scale) == 22);
+        == 21);
+    CHECK(flock3d::app::overlay_selected_parameter_line(layout, flock3d::app::TunableParameter::boid_scale) == 28);
 }
 
 TEST_CASE("Debug overlay local coordinates preserve readable text and compact highlight", "[controls]")
@@ -69,16 +69,17 @@ TEST_CASE("Debug overlay local coordinates preserve readable text and compact hi
 
     CHECK(flock3d::app::overlay_text_local_x(layout) == 14);
     CHECK(flock3d::app::overlay_line_local_y(layout, 0) == 14);
-    CHECK(flock3d::app::overlay_line_local_y(layout, 15) == 314);
+    CHECK(flock3d::app::overlay_line_local_y(layout, 21) == 434);
 
-    const auto highlight = flock3d::app::overlay_highlight_local_rect(layout, 15);
+    const auto highlight = flock3d::app::overlay_highlight_local_rect(layout, 21);
     CHECK(highlight.x == 8);
-    CHECK(highlight.y == 312);
-    CHECK(highlight.width == 434);
+    CHECK(highlight.y == 432);
+    CHECK(highlight.width == 494);
     CHECK(highlight.height == 20);
 
     CHECK(flock3d::app::overlay_is_section_header(0));
-    CHECK(flock3d::app::overlay_is_section_header(7));
-    CHECK(flock3d::app::overlay_is_section_header(14));
-    CHECK_FALSE(flock3d::app::overlay_is_section_header(15));
+    CHECK(flock3d::app::overlay_is_section_header(8));
+    CHECK(flock3d::app::overlay_is_section_header(13));
+    CHECK(flock3d::app::overlay_is_section_header(20));
+    CHECK_FALSE(flock3d::app::overlay_is_section_header(21));
 }

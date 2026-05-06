@@ -16,7 +16,9 @@ class BoidSimulation {
 public:
     explicit BoidSimulation(SimulationParameters parameters = {});
 
+    void reset();
     void reset(std::uint32_t boid_count);
+    void apply_parameters(const SimulationParameters& parameters);
     void update(float dt, SimulationMetrics* metrics = nullptr);
     void add_boid(Vector3 position, Vector3 velocity);
 
@@ -32,6 +34,7 @@ private:
     void wrap_position(Vector3& position) const noexcept;
     void rebuild_spatial_hash();
     [[nodiscard]] Vector3 seek(Vector3 position, Vector3 velocity, Vector3 target) const noexcept;
+    void record_collective_metrics(SimulationMetrics& metrics) const noexcept;
 
     SimulationParameters parameters_;
     SpatialHash3D spatial_hash_;

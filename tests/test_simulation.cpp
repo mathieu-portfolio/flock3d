@@ -1,8 +1,10 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <raylib.h>
 
 #include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/Scenario.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 
@@ -129,4 +131,91 @@ TEST_CASE("FixedTimestepAccumulator clamps very large frame deltas", "[time]")
     }
 
     CHECK(steps == 30);
+}
+
+
+TEST_CASE("BoidSimulation reset is reproducible for the same seed", "[simulation][seed]")
+{
+    flock3d::sim::SimulationParameters parameters{};
+    parameters.boid_count = 16;
+    parameters.random_seed = 4242U;
+
+    flock3d::sim::BoidSimulation first{parameters};
+    flock3d::sim::BoidSimulation second{parameters};
+
+    REQUIRE(first.positions().size() == second.positions().size());
+    REQUIRE(first.velocities().size() == second.velocities().size());
+    CHECK(first.positions().front().x == second.positions().front().x);
+    CHECK(first.positions().front().y == second.positions().front().y);
+    CHECK(first.positions().front().z == second.positions().front().z);
+    CHECK(first.velocities().front().x == second.velocities().front().x);
+    CHECK(first.velocities().front().y == second.velocities().front().y);
+    CHECK(first.velocities().front().z == second.velocities().front().z);
+
+    first.update(0.25F);
+    first.reset();
+    CHECK(first.positions().front().x == second.positions().front().x);
+    CHECK(first.velocities().front().z == second.velocities().front().z);
+}
+
+TEST_CASE("BoidSimulation uses different initial state for different seeds", "[simulation][seed]")
+{
+    flock3d::sim::SimulationParameters parameters{};
+    parameters.boid_count = 16;
+    parameters.random_seed = 111U;
+    flock3d::sim::BoidSimulation first{parameters};
+
+    parameters.random_seed = 222U;
+    flock3d::sim::BoidSimulation second{parameters};
+
+    REQUIRE(first.positions().size() == second.positions().size());
+    const bool different_position = first.positions().front().x != second.positions().front().x
+        || first.positions().front().y != second.positions().front().y
+        || first.positions().front().z != second.positions().front().z;
+    const bool different_velocity = first.velocities().front().x != second.velocities().front().x
+        || first.velocities().front().y != second.velocities().front().y
+        || first.velocities().front().z != second.velocities().front().z;
+    CHECK(different_position || different_velocity);
+}
+
+TEST_CASE("SimulationMetrics polarization is near one for aligned velocities", "[simulation][metrics]")
+{
+    auto parameters = steering_test_parameters();
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{-1.0F, 0.0F, 0.0F}, Vector3{2.0F, 0.0F, 0.0F});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{4.0F, 0.0F, 0.0F});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.polarization == Catch::Approx(1.0F).margin(0.0001F));
+    CHECK(metrics.average_speed == Catch::Approx(3.0F).margin(0.0001F));
+}
+
+TEST_CASE("SimulationMetrics polarization is lower for opposing velocities", "[simulation][metrics]")
+{
+    auto parameters = steering_test_parameters();
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{-1.0F, 0.0F, 0.0F}, Vector3{2.0F, 0.0F, 0.0F});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{-2.0F, 0.0F, 0.0F});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.polarization < 0.25F);
+}
+
+TEST_CASE("Scenario factory returns valid definitions for every scenario type", "[scenario]")
+{
+    for (const auto type : flock3d::sim::scenario_types) {
+        const auto definition = flock3d::sim::build_scenario(type);
+        CHECK(definition.type == type);
+        CHECK_FALSE(definition.display_name.empty());
+        CHECK_FALSE(definition.description.empty());
+        CHECK(definition.simulation_parameters.boid_count > 0);
+        CHECK(definition.simulation_parameters.random_seed > 0U);
+        CHECK(definition.environment.world_half_extent > 0.0F);
+        CHECK(definition.constraints.max_speed > 0.0F);
+        CHECK(definition.behavior.neighbor_radius > 0.0F);
+    }
 }
