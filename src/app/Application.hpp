@@ -73,7 +73,6 @@ private:
     bool show_overlay_{true};
     bool overlay_dirty_{true};
     bool overlay_texture_ready_{};
-    bool overlay_consumed_wheel_{};
 };
 
 } // namespace flock3d::app

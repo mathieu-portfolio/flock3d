@@ -154,6 +154,9 @@ Use these diagnostics first to distinguish render-bound frames from simulation-b
 - `N`: randomize the current scenario seed and reset.
 - `,` / `.`: switch to the previous or next scenario, applying that scenario's default parameters and seed.
 - `F1`: toggle the debug/metrics overlay.
+- `Mouse wheel`: adjust camera movement speed.
+- `Up` / `Down`: scroll the debug/metrics overlay when its content is taller than the window; hold `Shift` for larger jumps.
+- `Home` / `End`: jump to the top or bottom of the debug/metrics overlay.
 - `+` / `-` or keypad `+` / `-`: increase or decrease boid count in batches of 128.
 - `Tab` / `Shift+Tab`: cycle the selected tunable parameter.
 - `Left` / `Right` or `[` / `]`: decrease or increase the selected tunable parameter.
