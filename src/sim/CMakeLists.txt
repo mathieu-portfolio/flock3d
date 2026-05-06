@@ -4,6 +4,8 @@ set(flock3d_core_sources
 )
 
 set(flock3d_core_headers
+    ${PROJECT_SOURCE_DIR}/include/flock3d/app/ControlHelpers.hpp
+    ${PROJECT_SOURCE_DIR}/include/flock3d/app/OverlayLayout.hpp
     ${PROJECT_SOURCE_DIR}/include/flock3d/math/Vec3.hpp
     ${PROJECT_SOURCE_DIR}/include/flock3d/sim/BoidSimulation.hpp
     ${PROJECT_SOURCE_DIR}/include/flock3d/sim/SimulationMetrics.hpp

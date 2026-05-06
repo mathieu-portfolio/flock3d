@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <flock3d/app/ControlHelpers.hpp>
+#include <flock3d/app/OverlayLayout.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 
 TEST_CASE("Camera speed clamps to configured movement range", "[controls]")
@@ -42,4 +43,42 @@ TEST_CASE("Tunable parameter keyboard cycling wraps around", "[controls]")
           == flock3d::app::TunableParameter::boid_scale);
     CHECK(flock3d::app::offset_parameter(flock3d::app::TunableParameter::boid_scale, 1)
           == flock3d::app::TunableParameter::separation_weight);
+}
+
+TEST_CASE("Debug overlay layout derives stable panel and selection geometry", "[controls]")
+{
+    constexpr flock3d::app::OverlayLayout layout{};
+
+    CHECK(flock3d::app::overlay_panel_height(layout) == 488);
+
+    const auto panel = flock3d::app::overlay_panel_rect(layout);
+    CHECK(panel.x == 2);
+    CHECK(panel.y == 2);
+    CHECK(panel.width == 460);
+    CHECK(panel.height == 488);
+
+    CHECK(
+        flock3d::app::overlay_selected_parameter_line(layout, flock3d::app::TunableParameter::separation_weight)
+        == 15);
+    CHECK(flock3d::app::overlay_selected_parameter_line(layout, flock3d::app::TunableParameter::boid_scale) == 22);
+}
+
+TEST_CASE("Debug overlay local coordinates preserve readable text and compact highlight", "[controls]")
+{
+    constexpr flock3d::app::OverlayLayout layout{};
+
+    CHECK(flock3d::app::overlay_text_local_x(layout) == 14);
+    CHECK(flock3d::app::overlay_line_local_y(layout, 0) == 14);
+    CHECK(flock3d::app::overlay_line_local_y(layout, 15) == 314);
+
+    const auto highlight = flock3d::app::overlay_highlight_local_rect(layout, 15);
+    CHECK(highlight.x == 8);
+    CHECK(highlight.y == 312);
+    CHECK(highlight.width == 434);
+    CHECK(highlight.height == 20);
+
+    CHECK(flock3d::app::overlay_is_section_header(0));
+    CHECK(flock3d::app::overlay_is_section_header(7));
+    CHECK(flock3d::app::overlay_is_section_header(14));
+    CHECK_FALSE(flock3d::app::overlay_is_section_header(15));
 }
