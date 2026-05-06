@@ -1,8 +1,29 @@
 #include <catch2/catch_test_macros.hpp>
 #include <raylib.h>
 
+#include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
+
+namespace {
+
+[[nodiscard]] flock3d::sim::SimulationParameters steering_test_parameters()
+{
+    flock3d::sim::SimulationParameters parameters{};
+    parameters.boid_count = 0;
+    parameters.world_half_extent = 100.0F;
+    parameters.max_speed = 10.0F;
+    parameters.neighbor_radius = 10.0F;
+    parameters.separation_radius = 2.0F;
+    parameters.separation_weight = 0.0F;
+    parameters.alignment_weight = 0.0F;
+    parameters.cohesion_weight = 0.0F;
+    parameters.max_force = 10.0F;
+    parameters.spatial_cell_size = 4.0F;
+    return parameters;
+}
+
+} // namespace
 
 TEST_CASE("BoidSimulation wraps positions at world bounds", "[simulation]")
 {
@@ -18,6 +39,53 @@ TEST_CASE("BoidSimulation wraps positions at world bounds", "[simulation]")
 
     REQUIRE(simulation.positions().size() == 1);
     CHECK(simulation.positions().front().x == -10.0F);
+}
+
+TEST_CASE("BoidSimulation separation steers away from close neighbor", "[simulation]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.separation_weight = 1.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{});
+
+    simulation.update(1.0F);
+
+    REQUIRE(simulation.velocities().size() == 2);
+    CHECK(simulation.velocities()[0].x < 0.0F);
+    CHECK(simulation.velocities()[1].x > 0.0F);
+}
+
+TEST_CASE("BoidSimulation cohesion steers toward neighbor center", "[simulation]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.cohesion_weight = 1.0F;
+    parameters.separation_radius = 0.25F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{4.0F, 0.0F, 0.0F}, Vector3{});
+
+    simulation.update(1.0F);
+
+    REQUIRE(simulation.velocities().size() == 2);
+    CHECK(simulation.velocities()[0].x > 0.0F);
+    CHECK(simulation.velocities()[1].x < 0.0F);
+}
+
+TEST_CASE("BoidSimulation clamps velocity to max speed", "[simulation]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.max_speed = 3.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{}, Vector3{30.0F, 0.0F, 0.0F});
+
+    simulation.update(0.0F);
+
+    REQUIRE(simulation.velocities().size() == 1);
+    CHECK(flock3d::math::length(simulation.velocities().front()) <= 3.0001F);
 }
 
 TEST_CASE("FixedTimestepAccumulator consumes deterministic 120 Hz steps", "[time]")

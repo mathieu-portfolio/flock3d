@@ -24,7 +24,7 @@ TEST_CASE("SpatialHash3D maps positions to stable grid cells", "[spatial]")
     CHECK((hash.cell_for(Vector3{2.1F, -0.1F, -4.0F}) == flock3d::sim::CellCoord{1, -1, -2}));
 }
 
-TEST_CASE("SpatialHash3D returns nearby inserted indices", "[spatial]")
+TEST_CASE("SpatialHash3D returns nearby boids and excludes distant ones", "[spatial]")
 {
     flock3d::sim::SpatialHash3D hash{2.0F};
     hash.insert(1, Vector3{0.0F, 0.0F, 0.0F});

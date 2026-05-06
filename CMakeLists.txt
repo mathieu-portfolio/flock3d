@@ -20,6 +20,7 @@ include(Flock3DDependencies)
 flock3d_fetch_dependencies()
 
 add_subdirectory(src)
+add_subdirectory(benchmarks)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)

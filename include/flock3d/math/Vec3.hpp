@@ -36,8 +36,22 @@ namespace flock3d::math {
     return std::sqrt(length_squared(value));
 }
 
+[[nodiscard]] inline Vector3 normalize_safe(Vector3 value) noexcept
+{
+    const float squared = length_squared(value);
+    if (squared <= 0.000001F) {
+        return Vector3{};
+    }
+
+    return scale(value, 1.0F / std::sqrt(squared));
+}
+
 [[nodiscard]] inline Vector3 clamp_length(Vector3 value, float max_length) noexcept
 {
+    if (max_length <= 0.0F) {
+        return Vector3{};
+    }
+
     const float squared = length_squared(value);
     const float max_squared = max_length * max_length;
     if (squared <= max_squared || squared <= 0.0F) {
