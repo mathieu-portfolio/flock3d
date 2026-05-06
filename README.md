@@ -23,26 +23,39 @@
   - MSVC 2022+
   - Clang 14+
   - GCC 11+
-- Ninja is recommended for the provided presets
+- `VCPKG_ROOT` set to a vcpkg checkout for the provided presets
+- Ninja is optional and only needed when using the `debug-ninja` or `release-ninja` presets
 
 ### Configure, build, and test
 
 ```bash
-cmake --preset default
-cmake --build --preset default
-ctest --preset default
+./scripts/build.sh
+./scripts/tests.sh
+```
+
+The scripts use the `debug` preset by default. Pass another preset name as the first argument, or set `CMAKE_PRESET`, to use a different preset:
+
+```bash
+./scripts/build.sh release
+CMAKE_PRESET=debug-vs2022 ./scripts/tests.sh
 ```
 
 ### Run
 
 ```bash
-./build/default/flock3d
+./scripts/run.sh
+```
+
+Pass a preset name before `--` to run a different build, and pass any app arguments after `--`:
+
+```bash
+./scripts/run.sh release --
 ```
 
 On Windows, the executable is typically located at:
 
 ```powershell
-.\build\default\flock3d.exe
+.\build\debug\Debug\flock3d.exe
 ```
 
 ## Architecture overview
