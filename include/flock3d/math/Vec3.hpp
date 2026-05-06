@@ -26,9 +26,23 @@ namespace flock3d::math {
     return Vector3{lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z};
 }
 
+[[nodiscard]] constexpr float dot(Vector3 lhs, Vector3 rhs) noexcept
+{
+    return (lhs.x * rhs.x) + (lhs.y * rhs.y) + (lhs.z * rhs.z);
+}
+
+[[nodiscard]] constexpr Vector3 cross(Vector3 lhs, Vector3 rhs) noexcept
+{
+    return Vector3{
+        (lhs.y * rhs.z) - (lhs.z * rhs.y),
+        (lhs.z * rhs.x) - (lhs.x * rhs.z),
+        (lhs.x * rhs.y) - (lhs.y * rhs.x),
+    };
+}
+
 [[nodiscard]] constexpr float length_squared(Vector3 value) noexcept
 {
-    return (value.x * value.x) + (value.y * value.y) + (value.z * value.z);
+    return dot(value, value);
 }
 
 [[nodiscard]] inline float length(Vector3 value) noexcept

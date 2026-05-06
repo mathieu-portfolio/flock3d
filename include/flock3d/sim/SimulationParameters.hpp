@@ -18,6 +18,7 @@ struct SimulationParameters {
     float cohesion_weight{1.0F};
     float max_force{12.0F};
     float spatial_cell_size{4.0F};
+    float boid_scale{0.45F};
     std::uint32_t random_seed{1337U};
 };
 
