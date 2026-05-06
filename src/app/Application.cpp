@@ -61,7 +61,7 @@ void Application::run()
         const float frame_time_ms = frame_time * 1000.0F;
 
         handle_input();
-        if (camera_controller_.update(camera_, frame_time, !overlay_consumed_wheel_)) {
+        if (camera_controller_.update(camera_, frame_time, true)) {
             mark_overlay_dirty();
         }
 
@@ -107,8 +107,6 @@ void Application::run()
 void Application::handle_input()
 {
     bool changed = false;
-    overlay_consumed_wheel_ = false;
-
     changed = debug_controls_.handle_input(show_overlay_) || changed;
     update_overlay_scroll();
 
@@ -330,7 +328,7 @@ void Application::refresh_overlay_text(float frame_time_ms)
     write_literal(overlay_lines_[line++], "Scenario , previous, . next");
     write_literal(overlay_lines_[line++], "Export  O record, M mode, PgUp/PgDn rate");
     write_literal(overlay_lines_[line++], "Tune    Tab/Shift+Tab, Left/Right, 1-8");
-    write_literal(overlay_lines_[line++], "Overlay F1 toggle, wheel/Up/Down scroll");
+    write_literal(overlay_lines_[line++], "Overlay F1 toggle, Up/Down scroll, Home/End");
     write_literal(overlay_lines_[line++], "");
     write_line(
         overlay_lines_[line++],
@@ -496,16 +494,13 @@ bool Application::update_overlay_scroll()
     }
 
     int delta = 0;
-    const float wheel = GetMouseWheelMove();
-    if (wheel != 0.0F) {
-        delta -= static_cast<int>(wheel * static_cast<float>(overlay_layout.line_height * 3));
-        overlay_consumed_wheel_ = true;
-    }
+    const bool shift_scroll = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    const int scroll_step = shift_scroll ? overlay_layout.line_height * 6 : overlay_layout.line_height * 2;
     if (IsKeyPressed(KEY_UP)) {
-        delta -= overlay_layout.line_height * 2;
+        delta -= scroll_step;
     }
     if (IsKeyPressed(KEY_DOWN)) {
-        delta += overlay_layout.line_height * 2;
+        delta += scroll_step;
     }
     if (IsKeyPressed(KEY_HOME)) {
         delta = -max_scroll;
