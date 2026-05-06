@@ -7,6 +7,7 @@
 #include "app/CameraController.hpp"
 #include "app/DebugControls.hpp"
 #include "app/SimulationControls.hpp"
+#include <flock3d/app/OverlayLayout.hpp>
 #include "render/BoidRenderer.hpp"
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
@@ -29,12 +30,17 @@ public:
 private:
     static constexpr int screen_width = 1280;
     static constexpr int screen_height = 720;
-    static constexpr std::size_t overlay_line_count = 23;
+    static constexpr OverlayLayout overlay_layout{};
+    static constexpr std::size_t overlay_line_count = overlay_layout.line_count;
 
     void handle_input();
     void mark_overlay_dirty() noexcept;
     void refresh_overlay_text(float frame_time_ms);
-    void draw_overlay() const;
+    void render_overlay_texture();
+    void draw_overlay();
+    void draw_overlay_primitives(int origin_x, int origin_y) const;
+    bool ensure_overlay_texture();
+    void unload_overlay_texture() noexcept;
 
     Camera3D camera_{};
     CameraController camera_controller_{};
@@ -45,10 +51,14 @@ private:
     sim::SimulationMetrics metrics_{};
     render::BoidRenderer renderer_{};
     std::array<std::array<char, 96>, overlay_line_count> overlay_lines_{};
+    RenderTexture2D overlay_texture_{};
+    int overlay_texture_width_{};
+    int overlay_texture_height_{};
     double overlay_refresh_accumulator_{};
     bool paused_{};
     bool show_overlay_{true};
     bool overlay_dirty_{true};
+    bool overlay_texture_ready_{};
 };
 
 } // namespace flock3d::app

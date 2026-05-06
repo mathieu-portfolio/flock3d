@@ -45,6 +45,7 @@ Application::Application()
 
 Application::~Application()
 {
+    unload_overlay_texture();
     if (IsWindowReady()) {
         CloseWindow();
     }
@@ -70,25 +71,29 @@ void Application::run()
             }
         }
 
+        const auto render_start = Clock::now();
+        if (show_overlay_) {
+            overlay_refresh_accumulator_ += frame_time;
+            if (overlay_dirty_ || overlay_refresh_accumulator_ >= 0.10 || !overlay_texture_ready_) {
+                refresh_overlay_text(frame_time_ms);
+                render_overlay_texture();
+            }
+        }
+
         BeginDrawing();
         ClearBackground(Color{12, 16, 24, 255});
 
-        const auto render_start = Clock::now();
         BeginMode3D(camera_);
         DrawGrid(20, 4.0F);
         renderer_.draw(simulation_);
         EndMode3D();
-        metrics_.render_ms = elapsed_ms(render_start, Clock::now());
 
         if (show_overlay_) {
-            overlay_refresh_accumulator_ += frame_time;
-            if (overlay_dirty_ || overlay_refresh_accumulator_ >= 0.10) {
-                refresh_overlay_text(frame_time_ms);
-            }
             draw_overlay();
         } else {
             DrawText("F1: show debug overlay", 16, 16, 18, LIGHTGRAY);
         }
+        metrics_.render_ms = elapsed_ms(render_start, Clock::now());
 
         EndDrawing();
     }
@@ -152,30 +157,98 @@ void Application::refresh_overlay_text(float frame_time_ms)
     overlay_dirty_ = false;
 }
 
-void Application::draw_overlay() const
+void Application::render_overlay_texture()
 {
-    constexpr int x = 16;
-    constexpr int y = 16;
-    constexpr int line_height = 20;
-    constexpr int padding = 14;
-    constexpr int font_size = 16;
-    constexpr int width = 460;
-    constexpr std::size_t parameter_line_start = 15;
-    constexpr int height = static_cast<int>(overlay_line_count) * line_height + padding * 2;
+    if (!ensure_overlay_texture()) {
+        return;
+    }
 
-    DrawRectangle(x - padding, y - padding, width, height, Fade(BLACK, 0.68F));
-    DrawRectangleLines(x - padding, y - padding, width, height, Fade(SKYBLUE, 0.45F));
+    BeginTextureMode(overlay_texture_);
+    ClearBackground(BLANK);
+    draw_overlay_primitives(0, 0);
+    EndTextureMode();
+}
 
-    const std::size_t selected_parameter_line = parameter_line_start + parameter_index(simulation_controls_.selected_parameter());
+bool Application::ensure_overlay_texture()
+{
+    const auto panel = overlay_panel_rect(overlay_layout);
+    const int width = panel.width;
+    const int height = panel.height;
+    if (overlay_texture_ready_ && overlay_texture_width_ == width && overlay_texture_height_ == height) {
+        return true;
+    }
+
+    unload_overlay_texture();
+    overlay_texture_ = LoadRenderTexture(width, height);
+    overlay_texture_ready_ = overlay_texture_.id > 0 && overlay_texture_.texture.id > 0;
+    if (overlay_texture_ready_) {
+        overlay_texture_width_ = width;
+        overlay_texture_height_ = height;
+    }
+    return overlay_texture_ready_;
+}
+
+void Application::unload_overlay_texture() noexcept
+{
+    if (overlay_texture_ready_) {
+        UnloadRenderTexture(overlay_texture_);
+        overlay_texture_ = RenderTexture2D{};
+        overlay_texture_width_ = 0;
+        overlay_texture_height_ = 0;
+        overlay_texture_ready_ = false;
+    }
+}
+
+void Application::draw_overlay()
+{
+    if (!overlay_texture_ready_) {
+        render_overlay_texture();
+    }
+
+    const auto panel = overlay_panel_rect(overlay_layout);
+    if (!overlay_texture_ready_) {
+        draw_overlay_primitives(panel.x, panel.y);
+        return;
+    }
+
+    const Rectangle source{
+        0.0F,
+        0.0F,
+        static_cast<float>(overlay_texture_width_),
+        -static_cast<float>(overlay_texture_height_),
+    };
+    const Vector2 position{static_cast<float>(panel.x), static_cast<float>(panel.y)};
+    DrawTextureRec(overlay_texture_.texture, source, position, WHITE);
+}
+
+void Application::draw_overlay_primitives(int origin_x, int origin_y) const
+{
+    const auto panel = overlay_panel_rect(overlay_layout);
+
+    DrawRectangle(origin_x, origin_y, panel.width, panel.height, Fade(BLACK, 0.68F));
+    DrawRectangleLines(origin_x, origin_y, panel.width, panel.height, Fade(SKYBLUE, 0.45F));
+
+    const std::size_t selected_parameter_line = overlay_selected_parameter_line(
+        overlay_layout, simulation_controls_.selected_parameter());
     for (std::size_t i = 0; i < overlay_lines_.size(); ++i) {
-        const int line_y = y + static_cast<int>(i) * line_height;
+        const int line_y = origin_y + overlay_line_local_y(overlay_layout, i);
         if (i == selected_parameter_line) {
-            DrawRectangle(x - 6, line_y - 2, width - padding * 2 + 2, line_height, Fade(ORANGE, 0.25F));
+            const auto highlight = overlay_highlight_local_rect(overlay_layout, i);
+            DrawRectangle(
+                origin_x + highlight.x,
+                origin_y + highlight.y,
+                highlight.width,
+                highlight.height,
+                Fade(ORANGE, 0.25F));
         }
 
-        const bool section_header = i == 0 || i == 7 || i == 14;
-        const Color color = i == selected_parameter_line ? GOLD : (section_header ? RAYWHITE : LIGHTGRAY);
-        DrawText(overlay_lines_[i].data(), x, line_y, font_size, color);
+        const Color color = i == selected_parameter_line ? GOLD : (overlay_is_section_header(i) ? RAYWHITE : LIGHTGRAY);
+        DrawText(
+            overlay_lines_[i].data(),
+            origin_x + overlay_text_local_x(overlay_layout),
+            line_y,
+            overlay_layout.font_size,
+            color);
     }
 }
 
