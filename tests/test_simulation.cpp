@@ -175,7 +175,7 @@ TEST_CASE("BoidSimulation uses different initial state for different seeds", "[s
     const bool different_velocity = first.velocities().front().x != second.velocities().front().x
         || first.velocities().front().y != second.velocities().front().y
         || first.velocities().front().z != second.velocities().front().z;
-    CHECK(different_position || different_velocity);
+    CHECK((different_position || different_velocity));
 }
 
 TEST_CASE("SimulationMetrics polarization is near one for aligned velocities", "[simulation][metrics]")
