@@ -125,26 +125,28 @@ void Application::refresh_overlay_text(float frame_time_ms)
     std::size_t line = 0;
 
     write_literal(overlay_lines_[line++], "flock3d debug overlay");
-    write_line(overlay_lines_[line++], "FPS %d | frame %.2f ms | %s", GetFPS(), static_cast<double>(frame_time_ms), paused_ ? "paused" : "running");
-    write_line(overlay_lines_[line++], "Boids: %zu | avg neighbors: %.2f", simulation_.size(), static_cast<double>(metrics_.average_neighbors_per_boid));
-    write_line(overlay_lines_[line++], "Sim %.3f ms | render %.3f ms", metrics_.simulation_update_ms, metrics_.render_ms);
-    write_line(overlay_lines_[line++], "Cells: %zu | queries: %llu", metrics_.spatial_hash_cell_count, static_cast<unsigned long long>(metrics_.neighbor_queries));
-    write_line(overlay_lines_[line++], "Camera speed: %.1f (wheel adjusts)", static_cast<double>(camera_controller_.move_speed()));
+    write_line(overlay_lines_[line++], "FPS %d    frame %.2f ms    %s", GetFPS(), static_cast<double>(frame_time_ms), paused_ ? "paused" : "running");
+    write_line(overlay_lines_[line++], "Boids %-6zu   avg neighbors %.2f", simulation_.size(), static_cast<double>(metrics_.average_neighbors_per_boid));
+    write_line(overlay_lines_[line++], "Sim %.3f ms    Render %.3f ms", metrics_.simulation_update_ms, metrics_.render_ms);
+    write_line(overlay_lines_[line++], "Cells %-6zu   Queries %llu", metrics_.spatial_hash_cell_count, static_cast<unsigned long long>(metrics_.neighbor_queries));
+    write_line(overlay_lines_[line++], "Camera speed %.1f (mouse wheel)", static_cast<double>(camera_controller_.move_speed()));
     write_literal(overlay_lines_[line++], "");
-    write_literal(overlay_lines_[line++], "Camera: WASD move, Space up, Ctrl/C down");
+    write_literal(overlay_lines_[line++], "Controls");
+    write_literal(overlay_lines_[line++], "Camera  WASD move, Space up, Ctrl/C down");
     write_literal(overlay_lines_[line++], "        RMB look, Shift boost, wheel speed");
-    write_literal(overlay_lines_[line++], "Sim: P pause, R reset, +/- boids");
-    write_literal(overlay_lines_[line++], "Tune: 1-8 select, [/] adjust selected");
-    write_line(overlay_lines_[line++], "Selected: %.*s = %.2f", static_cast<int>(selected_descriptor.label.size()), selected_descriptor.label.data(), static_cast<double>(selected_value));
+    write_literal(overlay_lines_[line++], "Sim     P pause, R reset, +/- boids");
+    write_literal(overlay_lines_[line++], "Tune    Tab selects, Left/Right adjusts");
+    write_literal(overlay_lines_[line++], "        Shift+Tab back, 1-8 quick select");
     write_literal(overlay_lines_[line++], "");
-    write_line(overlay_lines_[line++], "1 sep %.2f | 2 align %.2f", static_cast<double>(parameters.separation_weight), static_cast<double>(parameters.alignment_weight));
-    write_line(overlay_lines_[line++], "3 coh %.2f | 4 percept %.2f", static_cast<double>(parameters.cohesion_weight), static_cast<double>(parameters.neighbor_radius));
-    write_line(overlay_lines_[line++], "5 sep radius %.2f | 6 max speed %.2f", static_cast<double>(parameters.separation_radius), static_cast<double>(parameters.max_speed));
-    write_line(overlay_lines_[line++], "7 max force %.2f | 8 scale %.2f", static_cast<double>(parameters.max_force), static_cast<double>(parameters.boid_scale));
-    write_literal(overlay_lines_[line++], "");
-    write_literal(overlay_lines_[line++], "Debug: F1 toggle overlay");
-    write_literal(overlay_lines_[line++], "World: free-fly camera, deterministic sim");
-    write_literal(overlay_lines_[line++], "");
+    write_line(overlay_lines_[line++], "Parameters    selected: %.*s = %.2f", static_cast<int>(selected_descriptor.label.size()), selected_descriptor.label.data(), static_cast<double>(selected_value));
+    write_line(overlay_lines_[line++], "1  Separation weight   %.2f", static_cast<double>(parameters.separation_weight));
+    write_line(overlay_lines_[line++], "2  Alignment weight    %.2f", static_cast<double>(parameters.alignment_weight));
+    write_line(overlay_lines_[line++], "3  Cohesion weight     %.2f", static_cast<double>(parameters.cohesion_weight));
+    write_line(overlay_lines_[line++], "4  Perception radius   %.2f", static_cast<double>(parameters.neighbor_radius));
+    write_line(overlay_lines_[line++], "5  Separation radius   %.2f", static_cast<double>(parameters.separation_radius));
+    write_line(overlay_lines_[line++], "6  Max speed           %.2f", static_cast<double>(parameters.max_speed));
+    write_line(overlay_lines_[line++], "7  Max force           %.2f", static_cast<double>(parameters.max_force));
+    write_line(overlay_lines_[line++], "8  Boid scale          %.2f", static_cast<double>(parameters.boid_scale));
 
     overlay_refresh_accumulator_ = 0.0;
     overlay_dirty_ = false;
@@ -154,18 +156,26 @@ void Application::draw_overlay() const
 {
     constexpr int x = 16;
     constexpr int y = 16;
-    constexpr int line_height = 18;
-    constexpr int padding = 10;
+    constexpr int line_height = 20;
+    constexpr int padding = 14;
     constexpr int font_size = 16;
-    constexpr int width = 360;
+    constexpr int width = 460;
+    constexpr std::size_t parameter_line_start = 15;
     constexpr int height = static_cast<int>(overlay_line_count) * line_height + padding * 2;
 
     DrawRectangle(x - padding, y - padding, width, height, Fade(BLACK, 0.68F));
     DrawRectangleLines(x - padding, y - padding, width, height, Fade(SKYBLUE, 0.45F));
 
+    const std::size_t selected_parameter_line = parameter_line_start + parameter_index(simulation_controls_.selected_parameter());
     for (std::size_t i = 0; i < overlay_lines_.size(); ++i) {
-        const Color color = i == 0 ? RAYWHITE : LIGHTGRAY;
-        DrawText(overlay_lines_[i].data(), x, y + static_cast<int>(i) * line_height, font_size, color);
+        const int line_y = y + static_cast<int>(i) * line_height;
+        if (i == selected_parameter_line) {
+            DrawRectangle(x - 6, line_y - 2, width - padding * 2 + 2, line_height, Fade(ORANGE, 0.25F));
+        }
+
+        const bool section_header = i == 0 || i == 7 || i == 14;
+        const Color color = i == selected_parameter_line ? GOLD : (section_header ? RAYWHITE : LIGHTGRAY);
+        DrawText(overlay_lines_[i].data(), x, line_y, font_size, color);
     }
 }
 

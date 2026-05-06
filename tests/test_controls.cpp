@@ -33,3 +33,13 @@ TEST_CASE("Tunable parameter index maps number keys to selected parameter", "[co
     CHECK(flock3d::app::parameter_from_index(7) == flock3d::app::TunableParameter::boid_scale);
     CHECK(flock3d::app::parameter_from_index(99) == flock3d::app::TunableParameter::boid_scale);
 }
+
+TEST_CASE("Tunable parameter keyboard cycling wraps around", "[controls]")
+{
+    CHECK(flock3d::app::offset_parameter(flock3d::app::TunableParameter::separation_weight, 1)
+          == flock3d::app::TunableParameter::alignment_weight);
+    CHECK(flock3d::app::offset_parameter(flock3d::app::TunableParameter::separation_weight, -1)
+          == flock3d::app::TunableParameter::boid_scale);
+    CHECK(flock3d::app::offset_parameter(flock3d::app::TunableParameter::boid_scale, 1)
+          == flock3d::app::TunableParameter::separation_weight);
+}
