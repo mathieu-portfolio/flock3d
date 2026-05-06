@@ -1,5 +1,9 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
+#include <cmath>
+#include <numbers>
+
 #include <raylib.h>
 
 #include <flock3d/math/Vec3.hpp>
@@ -218,4 +222,101 @@ TEST_CASE("Scenario factory returns valid definitions for every scenario type", 
         CHECK(definition.constraints.max_speed > 0.0F);
         CHECK(definition.behavior.neighbor_radius > 0.0F);
     }
+}
+
+TEST_CASE("BirdFlight enforces minimum speed", "[simulation][birdflight]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.model = flock3d::sim::SimulationModel::BirdFlight;
+    parameters.min_speed = 5.0F;
+    parameters.max_speed = 10.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 10.0F, 0.0F}, Vector3{1.0F, 0.0F, 0.0F});
+
+    simulation.update(0.0F);
+
+    REQUIRE(simulation.velocities().size() == 1);
+    CHECK(flock3d::math::length(simulation.velocities().front()) == Catch::Approx(5.0F));
+}
+
+TEST_CASE("BirdFlight limits turn rate", "[simulation][birdflight]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.model = flock3d::sim::SimulationModel::BirdFlight;
+    parameters.max_speed = 30.0F;
+    parameters.max_force = 100.0F;
+    parameters.gravity = 10.0F;
+    parameters.max_turn_rate = 10.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 10.0F, 0.0F}, Vector3{10.0F, 0.0F, 0.0F});
+
+    simulation.update(1.0F);
+
+    const auto direction = flock3d::math::normalize_safe(simulation.velocities().front());
+    const auto angle_radians = std::acos(std::clamp(direction.x, -1.0F, 1.0F));
+    const auto angle_degrees = angle_radians * 180.0F / std::numbers::pi_v<float>;
+    CHECK(angle_degrees <= 10.1F);
+}
+
+TEST_CASE("BirdFlight field of view excludes boids behind the agent", "[simulation][birdflight]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.model = flock3d::sim::SimulationModel::BirdFlight;
+    parameters.cohesion_weight = 1.0F;
+    parameters.max_force = 10.0F;
+    parameters.field_of_view_degrees = 180.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 10.0F, 0.0F}, Vector3{2.0F, 0.0F, 0.0F});
+    simulation.add_boid(Vector3{-4.0F, 10.0F, 0.0F}, Vector3{2.0F, 0.0F, 0.0F});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(1.0F, &metrics);
+
+    CHECK(simulation.velocities()[0].x == Catch::Approx(2.0F));
+    CHECK(metrics.neighbor_total == 1);
+}
+
+TEST_CASE("BirdFlight remains deterministic for the same seed", "[simulation][birdflight][seed]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::BirdFlight).simulation_parameters;
+    parameters.boid_count = 32U;
+    parameters.random_seed = 9090U;
+
+    flock3d::sim::BoidSimulation first{parameters};
+    flock3d::sim::BoidSimulation second{parameters};
+    flock3d::sim::SimulationMetrics first_metrics{};
+    flock3d::sim::SimulationMetrics second_metrics{};
+
+    for (int step = 0; step < 20; ++step) {
+        first.update(1.0F / 120.0F, &first_metrics);
+        second.update(1.0F / 120.0F, &second_metrics);
+    }
+
+    REQUIRE(first.positions().size() == second.positions().size());
+    CHECK(first.positions()[3].x == second.positions()[3].x);
+    CHECK(first.positions()[3].y == second.positions()[3].y);
+    CHECK(first.velocities()[7].z == second.velocities()[7].z);
+    CHECK(first_metrics.mean_altitude == second_metrics.mean_altitude);
+    CHECK(first_metrics.stall_count == second_metrics.stall_count);
+}
+
+TEST_CASE("BirdFlight scenario produces valid constrained parameters", "[scenario][birdflight]")
+{
+    const auto definition = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::BirdFlight);
+    const auto& parameters = definition.simulation_parameters;
+
+    CHECK(parameters.model == flock3d::sim::SimulationModel::BirdFlight);
+    CHECK(parameters.gravity > 0.0F);
+    CHECK(parameters.lift_strength > 0.0F);
+    CHECK(parameters.altitude_target > 0.0F);
+    CHECK(parameters.altitude_band > 0.0F);
+    CHECK(parameters.altitude_correction_strength > 0.0F);
+    CHECK(parameters.min_speed > 0.0F);
+    CHECK(parameters.max_climb_rate > 0.0F);
+    CHECK(parameters.max_turn_rate > 0.0F);
+    CHECK(parameters.field_of_view_degrees > 0.0F);
+    CHECK(parameters.field_of_view_degrees <= 360.0F);
 }

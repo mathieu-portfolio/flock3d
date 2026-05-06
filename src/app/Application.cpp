@@ -272,6 +272,16 @@ void Application::refresh_overlay_text(float frame_time_ms)
         static_cast<double>(metrics_.cohesion),
         static_cast<double>(metrics_.dispersion));
     write_line(overlay_lines_[line++], "Nearest neighbor avg %.2f", static_cast<double>(metrics_.nearest_neighbor_average_distance));
+    write_line(
+        overlay_lines_[line++],
+        "Altitude mean %.2f var %.2f",
+        static_cast<double>(metrics_.mean_altitude),
+        static_cast<double>(metrics_.altitude_variance));
+    write_line(
+        overlay_lines_[line++],
+        "Stalls %-5zu   Near ground %-5zu",
+        metrics_.stall_count,
+        metrics_.near_ground_count);
     write_literal(overlay_lines_[line++], "");
     write_literal(overlay_lines_[line++], "Metrics export");
     write_line(
@@ -306,6 +316,10 @@ void Application::refresh_overlay_text(float frame_time_ms)
     write_line(overlay_lines_[line++], "6  Max speed           %.2f", static_cast<double>(parameters.max_speed));
     write_line(overlay_lines_[line++], "7  Max force           %.2f", static_cast<double>(parameters.max_force));
     write_line(overlay_lines_[line++], "8  Boid scale          %.2f", static_cast<double>(parameters.boid_scale));
+    write_line(overlay_lines_[line++], "   Gravity             %.2f", static_cast<double>(parameters.gravity));
+    write_line(overlay_lines_[line++], "   Max turn rate       %.2f", static_cast<double>(parameters.max_turn_rate));
+    write_line(overlay_lines_[line++], "   Field of view       %.2f", static_cast<double>(parameters.field_of_view_degrees));
+    write_line(overlay_lines_[line++], "   Alt correction      %.2f", static_cast<double>(parameters.altitude_correction_strength));
 
     overlay_refresh_accumulator_ = 0.0;
     overlay_dirty_ = false;

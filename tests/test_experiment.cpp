@@ -8,7 +8,7 @@
 TEST_CASE("CSV metrics writer exposes required header", "[experiment][csv]")
 {
     CHECK(flock3d::experiment::CsvMetricsWriter::header()
-        == "scenario,seed,timestamp,git_commit,export_mode,sample_rate_hz,sample_index,simulation_time,boid_count,polarization,cohesion,dispersion,average_speed,average_neighbors,nearest_neighbor_distance,simulation_update_ms,neighbor_queries,spatial_cell_count,sweep_parameter,sweep_value");
+        == "scenario,seed,timestamp,git_commit,export_mode,sample_rate_hz,sample_index,simulation_time,boid_count,polarization,cohesion,dispersion,average_speed,average_neighbors,nearest_neighbor_distance,simulation_update_ms,neighbor_queries,spatial_cell_count,mean_altitude,altitude_variance,stall_count,near_ground_count,sweep_parameter,sweep_value");
 }
 
 TEST_CASE("SampleScheduler samples independently from fixed dt", "[experiment][sampling]")
@@ -105,4 +105,18 @@ TEST_CASE("Sweep parser expands inclusive numeric ranges", "[experiment][sweep]"
     CHECK(values[1] == Catch::Approx(0.5));
     CHECK(values[2] == Catch::Approx(1.0));
     CHECK_FALSE(flock3d::experiment::parse_sweep("alignment_weight=0:1:0").has_value());
+}
+
+
+TEST_CASE("Experiment sweeps BirdFlight constraint parameters", "[experiment][sweep][birdflight]")
+{
+    flock3d::sim::SimulationParameters parameters{};
+    CHECK(flock3d::experiment::apply_sweep_value(parameters, "gravity", 8.5));
+    CHECK(parameters.gravity == Catch::Approx(8.5F));
+    CHECK(flock3d::experiment::apply_sweep_value(parameters, "max_turn_rate", 95.0));
+    CHECK(parameters.max_turn_rate == Catch::Approx(95.0F));
+    CHECK(flock3d::experiment::apply_sweep_value(parameters, "field_of_view_degrees", 210.0));
+    CHECK(parameters.field_of_view_degrees == Catch::Approx(210.0F));
+    CHECK(flock3d::experiment::apply_sweep_value(parameters, "altitude_correction_strength", 2.25));
+    CHECK(parameters.altitude_correction_strength == Catch::Approx(2.25F));
 }

@@ -32,6 +32,10 @@ enum class TunableParameter : std::uint8_t {
     max_speed,
     max_force,
     boid_scale,
+    gravity,
+    max_turn_rate,
+    field_of_view_degrees,
+    altitude_correction_strength,
 };
 
 struct TunableParameterDescriptor {
@@ -43,7 +47,7 @@ struct TunableParameterDescriptor {
     float maximum;
 };
 
-inline constexpr std::array<TunableParameterDescriptor, 8> tunable_parameters{{
+inline constexpr std::array<TunableParameterDescriptor, 12> tunable_parameters{{
     {TunableParameter::separation_weight, "separation weight", &sim::SimulationParameters::separation_weight, 0.10F, 0.0F, 10.0F},
     {TunableParameter::alignment_weight, "alignment weight", &sim::SimulationParameters::alignment_weight, 0.10F, 0.0F, 10.0F},
     {TunableParameter::cohesion_weight, "cohesion weight", &sim::SimulationParameters::cohesion_weight, 0.10F, 0.0F, 10.0F},
@@ -52,6 +56,10 @@ inline constexpr std::array<TunableParameterDescriptor, 8> tunable_parameters{{
     {TunableParameter::max_speed, "max speed", &sim::SimulationParameters::max_speed, 0.50F, 0.5F, 120.0F},
     {TunableParameter::max_force, "max force", &sim::SimulationParameters::max_force, 0.50F, 0.5F, 120.0F},
     {TunableParameter::boid_scale, "boid scale", &sim::SimulationParameters::boid_scale, 0.05F, 0.05F, 5.0F},
+    {TunableParameter::gravity, "gravity", &sim::SimulationParameters::gravity, 0.25F, 0.0F, 40.0F},
+    {TunableParameter::max_turn_rate, "max turn rate", &sim::SimulationParameters::max_turn_rate, 5.0F, 0.0F, 720.0F},
+    {TunableParameter::field_of_view_degrees, "field of view", &sim::SimulationParameters::field_of_view_degrees, 5.0F, 1.0F, 360.0F},
+    {TunableParameter::altitude_correction_strength, "altitude correction", &sim::SimulationParameters::altitude_correction_strength, 0.10F, 0.0F, 20.0F},
 }};
 
 [[nodiscard]] constexpr const TunableParameterDescriptor& descriptor_for(TunableParameter parameter) noexcept

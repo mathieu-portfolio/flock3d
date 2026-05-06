@@ -5,6 +5,11 @@
 
 namespace flock3d::sim {
 
+enum class SimulationModel : std::uint8_t {
+    ClassicBoids = 0,
+    BirdFlight,
+};
+
 struct SimulationParameters {
     std::uint32_t boid_count{512};
     float world_half_extent{40.0F};
@@ -20,6 +25,16 @@ struct SimulationParameters {
     float spatial_cell_size{4.0F};
     float boid_scale{0.45F};
     std::uint32_t random_seed{1337U};
+    SimulationModel model{SimulationModel::ClassicBoids};
+    float gravity{0.0F};
+    float lift_strength{0.0F};
+    float altitude_target{0.0F};
+    float altitude_band{0.0F};
+    float altitude_correction_strength{0.0F};
+    float min_speed{0.0F};
+    float max_climb_rate{0.0F};
+    float max_turn_rate{0.0F};
+    float field_of_view_degrees{360.0F};
 };
 
 class FixedTimestepAccumulator {

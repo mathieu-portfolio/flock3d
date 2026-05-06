@@ -17,6 +17,10 @@ struct SimulationMetrics {
     float dispersion{};
     float average_speed{};
     float nearest_neighbor_average_distance{};
+    float mean_altitude{};
+    float altitude_variance{};
+    std::size_t stall_count{};
+    std::size_t near_ground_count{};
     std::size_t cluster_count{};
     std::size_t spatial_hash_cell_count{};
 
@@ -34,6 +38,10 @@ struct SimulationMetrics {
         dispersion = 0.0F;
         average_speed = 0.0F;
         nearest_neighbor_average_distance = 0.0F;
+        mean_altitude = 0.0F;
+        altitude_variance = 0.0F;
+        stall_count = 0;
+        near_ground_count = 0;
         cluster_count = 0;
         spatial_hash_cell_count = 0;
         nearest_neighbor_distance_total = 0.0;
@@ -67,6 +75,18 @@ struct SimulationMetrics {
         cohesion = step_cohesion;
         dispersion = step_dispersion;
         average_speed = step_average_speed;
+    }
+
+    constexpr void record_flight_metrics(
+        float step_mean_altitude,
+        float step_altitude_variance,
+        std::size_t step_stall_count,
+        std::size_t step_near_ground_count) noexcept
+    {
+        mean_altitude = step_mean_altitude;
+        altitude_variance = step_altitude_variance;
+        stall_count = step_stall_count;
+        near_ground_count = step_near_ground_count;
     }
 
     constexpr void finish_simulation_step(std::size_t boid_count, std::size_t cell_count) noexcept

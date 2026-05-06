@@ -201,6 +201,22 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
         parameters.max_force = float_value;
         return true;
     }
+    if (parameter == "gravity") {
+        parameters.gravity = float_value;
+        return true;
+    }
+    if (parameter == "max_turn_rate") {
+        parameters.max_turn_rate = float_value;
+        return true;
+    }
+    if (parameter == "field_of_view_degrees" || parameter == "field_of_view") {
+        parameters.field_of_view_degrees = float_value;
+        return true;
+    }
+    if (parameter == "altitude_correction_strength" || parameter == "altitude_correction") {
+        parameters.altitude_correction_strength = float_value;
+        return true;
+    }
     return false;
 }
 

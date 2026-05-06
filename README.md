@@ -1,6 +1,6 @@
 # flock3d
 
-`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, and quantitative flock metrics so future bird, fish, predator/prey, obstacle, leadership, and noise models can be added as isolated scenarios instead of ad-hoc flags.
+`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, quantitative flock metrics, and the first physically constrained Bird Flight scenario so future fish, predator/prey, obstacle, leadership, and noise models can be added as isolated scenarios instead of ad-hoc flags.
 
 ## Features
 
@@ -11,10 +11,10 @@
 - **Deterministic fixed timestep** simulation loop at 120 Hz.
 - **Simulation/rendering separation** so flock behavior can evolve without coupling to drawing code.
 - **Data-oriented SoA storage** for boid positions, velocities, and accelerations.
-- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, and boid count.
+- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, boid count, and Bird Flight constraint sweeps such as gravity, turn rate, field of view, and altitude correction.
 - **Scenario definitions** with display text, default simulation parameters, environment settings, constraints, behavior settings, metric settings, and deterministic seeds.
 - **Reproducible seed handling** so resetting a scenario with the same seed recreates the same initial boid positions and velocities.
-- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, and collective-behavior order parameters.
+- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, collective-behavior order parameters, and Bird Flight altitude/stall observables.
 - **Sampled CSV metrics export** for reproducible experiments without per-frame dumps.
 - **Headless experiment runner** (`flock3d_experiment_runner`) for deterministic scripted runs and one-parameter sweeps without opening a raylib window.
 - **Configurable directional boid scale** via simulation parameters.
@@ -97,12 +97,12 @@ This keeps the initial implementation simple while preserving a path toward cach
 
 ## v2 scientific scenarios
 
-The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. Only **Classic Boids** has bespoke behavior in v2; the remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
+The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. **Classic Boids** is the unconstrained baseline. **Bird Flight** is the first constrained behavior model and reuses the separation/alignment/cohesion rules only after applying scenario-specific perception and flight limits. The remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
 
 Current scenarios:
 
 - **Classic Boids**: baseline Reynolds-style separation, alignment, and cohesion in a wrapped 3D world.
-- **Bird Flight**: placeholder for future avian flight constraints, lift, and gravity-aware motion.
+- **Bird Flight**: gravity-aware flocking with upward lift, altitude hold, minimum airspeed, climb-rate limits, turn-rate limits, and a forward field of view.
 - **Fish School**: placeholder for future aquatic schooling and drag.
 - **Predator-Prey**: placeholder for future predator/prey roles and pursuit/evasion.
 - **Obstacle Avoidance**: placeholder for future obstacle fields and avoidance responses.
@@ -110,6 +110,22 @@ Current scenarios:
 - **Noise Experiment**: placeholder for future controlled noise sweeps.
 
 Each scenario stores its default seed. Switching scenarios applies its default parameters and resets the simulation from that scenario seed. Pressing reset recreates the current scenario state with the current seed; pressing the randomize-seed control assigns a new seed and resets immediately.
+
+
+### Bird Flight constraints
+
+Bird Flight is intentionally simple rather than aerodynamically realistic. It is meant to study how gravity, limited perception, and limited maneuverability change flock stability relative to Classic Boids. The scenario keeps the existing separation, alignment, and cohesion rules, then adds these constraints through `SimulationParameters`:
+
+- `gravity`: downward acceleration applied every fixed simulation step.
+- `lift_strength`: baseline upward acceleration that can counter gravity.
+- `altitude_target` and `altitude_band`: define a preferred vertical band.
+- `altitude_correction_strength`: proportional upward/downward acceleration applied only outside the altitude band.
+- `min_speed`: minimum sustained velocity magnitude used as a simple stall-prevention constraint.
+- `max_climb_rate`: cap on vertical velocity.
+- `max_turn_rate`: maximum heading change in degrees per second.
+- `field_of_view_degrees`: forward cone used to ignore neighbors behind or outside the bird's perception.
+
+The same model runs in the interactive viewer, CSV recorder, headless runner, and one-parameter sweep path.
 
 ## What are boids?
 
@@ -147,8 +163,8 @@ CSV files are written under `outputs/` by the interactive app using timestamped 
 
 Supported export modes:
 
-- **SampledTimeSeries** (default): writes one row per sample containing scenario, seed, timestamp, git commit when available, sample rate, sample index, simulation time, boid count, polarization, cohesion, dispersion, average speed, average neighbors, nearest-neighbor distance, simulation update time, neighbor queries, spatial hash cell count, and optional sweep metadata.
-- **Summary**: samples at the same independent cadence but writes one aggregate row at the end of recording or at the end of a headless run. The aggregate records mean polarization, mean cohesion, max dispersion, mean speed, mean neighbors, and total duration in the shared CSV schema; `SummaryAggregator` also retains max polarization for code-level consumers.
+- **SampledTimeSeries** (default): writes one row per sample containing scenario, seed, timestamp, git commit when available, sample rate, sample index, simulation time, boid count, polarization, cohesion, dispersion, average speed, average neighbors, nearest-neighbor distance, simulation update time, neighbor queries, spatial hash cell count, mean altitude, altitude variance, stall count, near-ground count, and optional sweep metadata.
+- **Summary**: samples at the same independent cadence but writes one aggregate row at the end of recording or at the end of a headless run. The aggregate records mean polarization, mean cohesion, max dispersion, mean speed, mean neighbors, mean flight metrics, and total duration in the shared CSV schema; `SummaryAggregator` also retains max polarization for code-level consumers.
 - **FullTrajectory**: declared as a placeholder for future full state export and intentionally not implemented yet.
 
 ## Headless experiment runner
@@ -209,6 +225,23 @@ One-parameter sweeps use inclusive `start:end:step` ranges. Only one `--sweep` a
   --output outputs/alignment_weight_sweep.csv
 ```
 
+Example Bird Flight constraint sweep:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --scenario BirdFlight \
+  --seed 2401 \
+  --boids 1024 \
+  --duration 30 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode sampled \
+  --sweep max_turn_rate=45:180:45 \
+  --output outputs/birdflight_turn_rate_sweep.csv
+```
+
+Bird Flight sweeps support at least `gravity`, `max_turn_rate`, `field_of_view_degrees`, and `altitude_correction_strength`.
+
 ## Debug overlay and metrics
 
 The `F1` overlay is intentionally compact and rendered with raylib text primitives so it can stay visible during performance experiments. It refreshes cached text at a low rate, or immediately after input changes, to avoid unnecessary formatting work every frame.
@@ -224,12 +257,15 @@ Displayed metrics include:
 - **Dispersion**: root-mean-square distance from each boid to the flock center of mass.
 - **Average speed**: mean velocity magnitude across all boids.
 - **Nearest-neighbor average distance**: average nearest observed neighbor distance gathered during the existing spatial-hash neighbor queries.
+- **Mean altitude / altitude variance**: vertical center and spread of the flock, useful for Bird Flight altitude-hold studies.
+- **Stall count**: boids below `min_speed` after the latest update.
+- **Near-ground count**: boids at or below the simple `y <= 0` ground reference.
 - **Cluster count**: reserved as a TODO metric until connectivity semantics are defined for scenario-specific models.
 - **Simulation update time**: wall-clock duration of the most recent fixed simulation update.
 - **Render time**: wall-clock duration of the most recent 3D draw pass.
 - **Spatial hash cell count**: occupied cells after the latest hash rebuild.
 - **Neighbor queries**: number of spatial neighbor queries issued by the latest fixed simulation step.
-- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, separation radius, max speed, max force, and boid scale.
+- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, separation radius, max speed, max force, boid scale, gravity, max turn rate, field of view, and altitude correction strength.
 
 ## Screenshots
 
@@ -237,7 +273,7 @@ Screenshots and capture notes for the debug overlay and larger flock scenarios w
 
 ## Roadmap
 
-- Implement isolated bird-flight, fish-school, predator/prey, obstacle-avoidance, leadership, and noise behavior models.
+- Refine isolated fish-school, predator/prey, obstacle-avoidance, leadership, and noise behavior models.
 - Add deterministic scenario fixtures for simulation regression tests.
 - Define cluster-count connectivity semantics for scientific metrics.
 - Implement full-trajectory export when a compact trajectory schema is defined.
