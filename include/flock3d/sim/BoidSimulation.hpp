@@ -6,6 +6,7 @@
 
 #include <raylib.h>
 
+#include <flock3d/sim/SimulationMetrics.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 #include <flock3d/sim/SpatialHash3D.hpp>
 
@@ -16,13 +17,14 @@ public:
     explicit BoidSimulation(SimulationParameters parameters = {});
 
     void reset(std::uint32_t boid_count);
-    void update(float dt);
+    void update(float dt, SimulationMetrics* metrics = nullptr);
     void add_boid(Vector3 position, Vector3 velocity);
 
     [[nodiscard]] const std::vector<Vector3>& positions() const noexcept { return positions_; }
     [[nodiscard]] const std::vector<Vector3>& velocities() const noexcept { return velocities_; }
     [[nodiscard]] const std::vector<Vector3>& accelerations() const noexcept { return accelerations_; }
     [[nodiscard]] const SimulationParameters& parameters() const noexcept { return parameters_; }
+    [[nodiscard]] SimulationParameters& parameters() noexcept { return parameters_; }
     [[nodiscard]] std::size_t size() const noexcept { return positions_.size(); }
 
 private:
@@ -36,6 +38,7 @@ private:
     std::vector<Vector3> positions_;
     std::vector<Vector3> velocities_;
     std::vector<Vector3> accelerations_;
+    std::vector<std::size_t> neighbor_indices_;
 };
 
 } // namespace flock3d::sim

@@ -3,6 +3,7 @@
 
 #include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/SimulationMetrics.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 
 namespace {
@@ -86,6 +87,24 @@ TEST_CASE("BoidSimulation clamps velocity to max speed", "[simulation]")
 
     REQUIRE(simulation.velocities().size() == 1);
     CHECK(flock3d::math::length(simulation.velocities().front()) <= 3.0001F);
+}
+
+TEST_CASE("BoidSimulation records neighbor metrics", "[simulation]")
+{
+    auto parameters = steering_test_parameters();
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{50.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.neighbor_queries == 3);
+    CHECK(metrics.neighbor_candidates == 5);
+    CHECK(metrics.neighbor_total == 2);
+    CHECK(metrics.average_neighbors_per_boid == 2.0F / 3.0F);
+    CHECK(metrics.spatial_hash_cell_count == 2);
 }
 
 TEST_CASE("FixedTimestepAccumulator consumes deterministic 120 Hz steps", "[time]")

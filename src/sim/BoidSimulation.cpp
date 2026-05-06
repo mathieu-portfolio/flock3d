@@ -35,14 +35,20 @@ void BoidSimulation::reset(std::uint32_t boid_count)
     positions_.clear();
     velocities_.clear();
     accelerations_.clear();
+    neighbor_indices_.clear();
     positions_.reserve(boid_count);
     velocities_.reserve(boid_count);
     accelerations_.reserve(boid_count);
+    neighbor_indices_.reserve(boid_count);
     spawn_random(boid_count);
 }
 
-void BoidSimulation::update(float dt)
+void BoidSimulation::update(float dt, SimulationMetrics* metrics)
 {
+    if (metrics != nullptr) {
+        metrics->begin_simulation_step();
+    }
+
     rebuild_spatial_hash();
 
     const float neighbor_radius_squared = parameters_.neighbor_radius * parameters_.neighbor_radius;
@@ -52,7 +58,10 @@ void BoidSimulation::update(float dt)
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 position = positions_[i];
         const Vector3 velocity = velocities_[i];
-        const auto neighbors = spatial_hash_.query_neighbors(position, query_radius);
+        spatial_hash_.query_neighbors(position, query_radius, neighbor_indices_);
+        if (metrics != nullptr) {
+            metrics->record_neighbor_query(neighbor_indices_.size());
+        }
 
         Vector3 separation_sum{};
         Vector3 alignment_sum{};
@@ -60,7 +69,7 @@ void BoidSimulation::update(float dt)
         std::size_t separation_count = 0;
         std::size_t flock_count = 0;
 
-        for (const std::size_t neighbor_index : neighbors) {
+        for (const std::size_t neighbor_index : neighbor_indices_) {
             if (neighbor_index == i) {
                 continue;
             }
@@ -92,6 +101,10 @@ void BoidSimulation::update(float dt)
             acceleration = math::add(acceleration, math::scale(steering, parameters_.separation_weight));
         }
 
+        if (metrics != nullptr) {
+            metrics->record_effective_neighbors(flock_count);
+        }
+
         if (flock_count > 0) {
             const Vector3 average_velocity = math::scale(alignment_sum, 1.0F / static_cast<float>(flock_count));
             const Vector3 desired = math::scale(math::normalize_safe(average_velocity), parameters_.max_speed);
@@ -111,6 +124,10 @@ void BoidSimulation::update(float dt)
         positions_[i] = math::add(positions_[i], math::scale(velocities_[i], dt));
         wrap_position(positions_[i]);
     }
+
+    if (metrics != nullptr) {
+        metrics->finish_simulation_step(positions_.size(), spatial_hash_.cell_count());
+    }
 }
 
 void BoidSimulation::add_boid(Vector3 position, Vector3 velocity)
@@ -118,6 +135,10 @@ void BoidSimulation::add_boid(Vector3 position, Vector3 velocity)
     positions_.push_back(position);
     velocities_.push_back(velocity);
     accelerations_.push_back(Vector3{});
+
+    if (neighbor_indices_.capacity() < positions_.size()) {
+        neighbor_indices_.reserve(positions_.size());
+    }
 }
 
 void BoidSimulation::spawn_random(std::uint32_t boid_count)
