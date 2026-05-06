@@ -1,6 +1,7 @@
 # CMake/build artifacts
 build/
 out/
+outputs/
 cmake-build-*/
 CMakeFiles/
 CMakeScripts/
