@@ -17,7 +17,7 @@ public:
     CameraController& operator=(CameraController&&) = delete;
 
     void initialize_from_camera(const Camera3D& camera) noexcept;
-    bool update(Camera3D& camera, float delta_seconds);
+    bool update(Camera3D& camera, float delta_seconds, bool allow_wheel_speed_change = true);
 
     [[nodiscard]] float move_speed() const noexcept { return move_speed_; }
     [[nodiscard]] const CameraSettings& settings() const noexcept { return settings_; }

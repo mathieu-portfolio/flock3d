@@ -61,7 +61,7 @@ void Application::run()
         const float frame_time_ms = frame_time * 1000.0F;
 
         handle_input();
-        if (camera_controller_.update(camera_, frame_time)) {
+        if (camera_controller_.update(camera_, frame_time, !overlay_consumed_wheel_)) {
             mark_overlay_dirty();
         }
 
@@ -107,8 +107,10 @@ void Application::run()
 void Application::handle_input()
 {
     bool changed = false;
+    overlay_consumed_wheel_ = false;
 
     changed = debug_controls_.handle_input(show_overlay_) || changed;
+    update_overlay_scroll();
 
     const auto simulation_input = simulation_controls_.handle_input(simulation_, paused_);
     changed = simulation_input.changed || changed;
@@ -328,6 +330,7 @@ void Application::refresh_overlay_text(float frame_time_ms)
     write_literal(overlay_lines_[line++], "Scenario , previous, . next");
     write_literal(overlay_lines_[line++], "Export  O record, M mode, PgUp/PgDn rate");
     write_literal(overlay_lines_[line++], "Tune    Tab/Shift+Tab, Left/Right, 1-8");
+    write_literal(overlay_lines_[line++], "Overlay F1 toggle, wheel/Up/Down scroll");
     write_literal(overlay_lines_[line++], "");
     write_line(
         overlay_lines_[line++],
@@ -401,19 +404,30 @@ void Application::draw_overlay()
     }
 
     const auto panel = overlay_panel_rect(overlay_layout);
+    const int visible_height = overlay_visible_panel_height(overlay_layout, GetScreenHeight());
+    const int max_scroll = overlay_max_scroll_offset(overlay_layout, GetScreenHeight());
+    overlay_scroll_offset_ = overlay_clamped_scroll_offset(overlay_layout, GetScreenHeight(), overlay_scroll_offset_);
+
     if (!overlay_texture_ready_) {
-        draw_overlay_primitives(panel.x, panel.y);
+        BeginScissorMode(panel.x, panel.y, panel.width, visible_height);
+        draw_overlay_primitives(panel.x, panel.y - overlay_scroll_offset_);
+        EndScissorMode();
+        DrawRectangleLines(panel.x, panel.y, panel.width, visible_height, Fade(SKYBLUE, 0.45F));
+        draw_overlay_scrollbar(panel, visible_height, max_scroll);
         return;
     }
 
+    const int source_y = overlay_texture_height_ - visible_height - overlay_scroll_offset_;
     const Rectangle source{
         0.0F,
-        0.0F,
+        static_cast<float>(source_y),
         static_cast<float>(overlay_texture_width_),
-        -static_cast<float>(overlay_texture_height_),
+        -static_cast<float>(visible_height),
     };
     const Vector2 position{static_cast<float>(panel.x), static_cast<float>(panel.y)};
     DrawTextureRec(overlay_texture_.texture, source, position, WHITE);
+    DrawRectangleLines(panel.x, panel.y, panel.width, visible_height, Fade(SKYBLUE, 0.45F));
+    draw_overlay_scrollbar(panel, visible_height, max_scroll);
 }
 
 void Application::draw_overlay_primitives(int origin_x, int origin_y) const
@@ -445,6 +459,66 @@ void Application::draw_overlay_primitives(int origin_x, int origin_y) const
             overlay_layout.font_size,
             color);
     }
+}
+
+void Application::draw_overlay_scrollbar(const OverlayRect& panel, int visible_height, int max_scroll) const
+{
+    if (max_scroll <= 0) {
+        return;
+    }
+
+    constexpr int track_width = 6;
+    constexpr int track_margin = 5;
+    const int track_x = panel.x + panel.width - track_margin - track_width;
+    const int track_y = panel.y + track_margin;
+    const int track_height = visible_height - track_margin * 2;
+    const int content_height = overlay_panel_height(overlay_layout);
+    const int thumb_height = std::max(24, track_height * visible_height / content_height);
+    const int scroll_range = max_scroll > 0 ? max_scroll : 1;
+    const int thumb_travel = std::max(0, track_height - thumb_height);
+    const int thumb_y = track_y + thumb_travel * overlay_scroll_offset_ / scroll_range;
+
+    DrawRectangle(track_x, track_y, track_width, track_height, Fade(LIGHTGRAY, 0.22F));
+    DrawRectangle(track_x, thumb_y, track_width, thumb_height, Fade(SKYBLUE, 0.85F));
+}
+
+bool Application::update_overlay_scroll()
+{
+    if (!show_overlay_) {
+        overlay_scroll_offset_ = 0;
+        return false;
+    }
+
+    const int max_scroll = overlay_max_scroll_offset(overlay_layout, GetScreenHeight());
+    if (max_scroll <= 0) {
+        overlay_scroll_offset_ = 0;
+        return false;
+    }
+
+    int delta = 0;
+    const float wheel = GetMouseWheelMove();
+    if (wheel != 0.0F) {
+        delta -= static_cast<int>(wheel * static_cast<float>(overlay_layout.line_height * 3));
+        overlay_consumed_wheel_ = true;
+    }
+    if (IsKeyPressed(KEY_UP)) {
+        delta -= overlay_layout.line_height * 2;
+    }
+    if (IsKeyPressed(KEY_DOWN)) {
+        delta += overlay_layout.line_height * 2;
+    }
+    if (IsKeyPressed(KEY_HOME)) {
+        delta = -max_scroll;
+    }
+    if (IsKeyPressed(KEY_END)) {
+        delta = max_scroll;
+    }
+
+    const int next_offset = overlay_clamped_scroll_offset(
+        overlay_layout, GetScreenHeight(), overlay_scroll_offset_ + delta);
+    const bool changed = next_offset != overlay_scroll_offset_;
+    overlay_scroll_offset_ = next_offset;
+    return changed;
 }
 
 } // namespace flock3d::app

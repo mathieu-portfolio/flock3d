@@ -44,3 +44,19 @@ TEST_CASE("Tunable parameter keyboard cycling wraps around", "[controls]")
     CHECK(flock3d::app::offset_parameter(flock3d::app::TunableParameter::boid_scale, 1)
           == flock3d::app::TunableParameter::separation_weight);
 }
+
+TEST_CASE("Overlay visible height adapts to short windows", "[controls]")
+{
+    constexpr flock3d::app::OverlayLayout layout{};
+    CHECK(flock3d::app::overlay_panel_height(layout) == 948);
+    CHECK(flock3d::app::overlay_visible_panel_height(layout, 720) == 704);
+    CHECK(flock3d::app::overlay_max_scroll_offset(layout, 720) == 244);
+}
+
+TEST_CASE("Overlay scroll offset clamps to available content", "[controls]")
+{
+    constexpr flock3d::app::OverlayLayout layout{};
+    CHECK(flock3d::app::overlay_clamped_scroll_offset(layout, 720, -10) == 0);
+    CHECK(flock3d::app::overlay_clamped_scroll_offset(layout, 720, 80) == 80);
+    CHECK(flock3d::app::overlay_clamped_scroll_offset(layout, 720, 1000) == 244);
+}

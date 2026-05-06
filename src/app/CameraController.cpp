@@ -85,11 +85,11 @@ void CameraController::initialize_from_camera(const Camera3D& camera) noexcept
     pitch_ = std::asin(std::clamp(forward.y, -1.0F, 1.0F));
 }
 
-bool CameraController::update(Camera3D& camera, float delta_seconds)
+bool CameraController::update(Camera3D& camera, float delta_seconds, bool allow_wheel_speed_change)
 {
     bool changed = false;
 
-    const float wheel = GetMouseWheelMove();
+    const float wheel = allow_wheel_speed_change ? GetMouseWheelMove() : 0.0F;
     if (wheel != 0.0F) {
         move_speed_ = clamped_camera_speed(move_speed_ + wheel * wheel_speed_step, settings_);
         changed = true;
