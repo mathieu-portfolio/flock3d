@@ -29,7 +29,7 @@ public:
 private:
     static constexpr int screen_width = 1280;
     static constexpr int screen_height = 720;
-    static constexpr std::size_t overlay_line_count = 21;
+    static constexpr std::size_t overlay_line_count = 23;
 
     void handle_input();
     void mark_overlay_dirty() noexcept;

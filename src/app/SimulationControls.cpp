@@ -65,13 +65,18 @@ SimulationControlResult SimulationControls::handle_input(sim::BoidSimulation& si
         selected_parameter_ = parameter_from_index(static_cast<std::size_t>(selected_index));
         result.changed = true;
     }
+    if (IsKeyPressed(KEY_TAB)) {
+        const int direction = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? -1 : 1;
+        selected_parameter_ = offset_parameter(selected_parameter_, direction);
+        result.changed = true;
+    }
 
     auto& parameters = simulation.parameters();
-    if (IsKeyPressed(KEY_LEFT_BRACKET)) {
+    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_LEFT_BRACKET)) {
         adjust_parameter(parameters, selected_parameter_, -1);
         result.changed = true;
     }
-    if (IsKeyPressed(KEY_RIGHT_BRACKET)) {
+    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_RIGHT_BRACKET)) {
         adjust_parameter(parameters, selected_parameter_, 1);
         result.changed = true;
     }

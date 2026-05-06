@@ -64,6 +64,19 @@ inline constexpr std::array<TunableParameterDescriptor, 8> tunable_parameters{{
     return tunable_parameters[std::clamp<std::size_t>(zero_based_index, 0, tunable_parameters.size() - 1)].parameter;
 }
 
+[[nodiscard]] constexpr std::size_t parameter_index(TunableParameter parameter) noexcept
+{
+    return static_cast<std::size_t>(parameter);
+}
+
+[[nodiscard]] constexpr TunableParameter offset_parameter(TunableParameter parameter, int offset) noexcept
+{
+    const auto count = static_cast<int>(tunable_parameters.size());
+    const auto current = static_cast<int>(parameter_index(parameter));
+    const auto wrapped = (current + offset % count + count) % count;
+    return parameter_from_index(static_cast<std::size_t>(wrapped));
+}
+
 [[nodiscard]] inline float parameter_value(const sim::SimulationParameters& parameters, TunableParameter parameter) noexcept
 {
     const auto& descriptor = descriptor_for(parameter);
