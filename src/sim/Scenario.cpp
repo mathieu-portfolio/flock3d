@@ -1,9 +1,54 @@
 #include <flock3d/sim/Scenario.hpp>
 
+#include <array>
+#include <cctype>
 #include <cstddef>
 
 namespace flock3d::sim {
 namespace {
+
+
+constexpr std::array<std::string_view, 7> scenario_cli_names{{
+    "ClassicBoids",
+    "BirdFlight",
+    "FishSchool",
+    "PredatorPrey",
+    "ObstacleAvoidance",
+    "Leadership",
+    "NoiseExperiment",
+}};
+
+[[nodiscard]] constexpr bool is_name_separator(char character) noexcept
+{
+    return character == ' ' || character == '-' || character == '_';
+}
+
+[[nodiscard]] char normalized_character(char character) noexcept
+{
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+}
+
+[[nodiscard]] bool normalized_equal(std::string_view lhs, std::string_view rhs) noexcept
+{
+    std::size_t lhs_index = 0;
+    std::size_t rhs_index = 0;
+    while (true) {
+        while (lhs_index < lhs.size() && is_name_separator(lhs[lhs_index])) {
+            ++lhs_index;
+        }
+        while (rhs_index < rhs.size() && is_name_separator(rhs[rhs_index])) {
+            ++rhs_index;
+        }
+        if (lhs_index == lhs.size() || rhs_index == rhs.size()) {
+            return lhs_index == lhs.size() && rhs_index == rhs.size();
+        }
+        if (normalized_character(lhs[lhs_index]) != normalized_character(rhs[rhs_index])) {
+            return false;
+        }
+        ++lhs_index;
+        ++rhs_index;
+    }
+}
 
 [[nodiscard]] constexpr std::size_t scenario_index(ScenarioType type) noexcept
 {
@@ -105,6 +150,27 @@ ScenarioDefinition build_scenario(ScenarioType type) noexcept
 
     sync_plain_settings_to_parameters(definition);
     return definition;
+}
+
+
+std::string_view scenario_display_name(ScenarioType type) noexcept
+{
+    return build_scenario(type).display_name;
+}
+
+std::string_view scenario_cli_name(ScenarioType type) noexcept
+{
+    return scenario_cli_names[scenario_index(type)];
+}
+
+std::optional<ScenarioType> scenario_type_from_name(std::string_view name) noexcept
+{
+    for (std::size_t i = 0; i < scenario_types.size(); ++i) {
+        if (normalized_equal(name, scenario_cli_names[i]) || normalized_equal(name, build_scenario(scenario_types[i]).display_name)) {
+            return scenario_types[i];
+        }
+    }
+    return std::nullopt;
 }
 
 ScenarioDefinition BuildScenario(ScenarioType type) noexcept

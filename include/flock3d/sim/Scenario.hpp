@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 #include <flock3d/sim/SimulationParameters.hpp>
@@ -64,6 +65,9 @@ inline constexpr std::array<ScenarioType, 7> scenario_types{{
 }};
 
 [[nodiscard]] ScenarioDefinition build_scenario(ScenarioType type) noexcept;
+[[nodiscard]] std::string_view scenario_display_name(ScenarioType type) noexcept;
+[[nodiscard]] std::string_view scenario_cli_name(ScenarioType type) noexcept;
+[[nodiscard]] std::optional<ScenarioType> scenario_type_from_name(std::string_view name) noexcept;
 [[nodiscard]] ScenarioDefinition BuildScenario(ScenarioType type) noexcept;
 [[nodiscard]] ScenarioDefinition ScenarioFactory(ScenarioType type) noexcept;
 [[nodiscard]] ScenarioType next_scenario_type(ScenarioType type) noexcept;

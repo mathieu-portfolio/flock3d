@@ -20,6 +20,7 @@ target_include_directories(flock3d
 target_link_libraries(flock3d
     PRIVATE
         flock3d::core
+        flock3d::experiment
         flock3d::render
         raylib
 )

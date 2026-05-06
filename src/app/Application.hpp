@@ -8,6 +8,7 @@
 #include "app/DebugControls.hpp"
 #include "app/SimulationControls.hpp"
 #include <flock3d/app/OverlayLayout.hpp>
+#include <flock3d/experiment/MetricsExport.hpp>
 #include "render/BoidRenderer.hpp"
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/Scenario.hpp>
@@ -40,6 +41,9 @@ private:
     void apply_scenario(sim::ScenarioType type);
     void reset_current_scenario();
     void randomize_current_seed();
+    void toggle_recording();
+    void cycle_export_mode();
+    void adjust_sample_rate(double scale) noexcept;
     void render_overlay_texture();
     void draw_overlay();
     void draw_overlay_primitives(int origin_x, int origin_y) const;
@@ -54,12 +58,14 @@ private:
     sim::BoidSimulation simulation_{active_scenario_.simulation_parameters};
     sim::FixedTimestepAccumulator timestep_{1.0 / 120.0};
     sim::SimulationMetrics metrics_{};
+    experiment::MetricsRecorder recorder_{};
     render::BoidRenderer renderer_{};
     std::array<std::array<char, 96>, overlay_line_count> overlay_lines_{};
     RenderTexture2D overlay_texture_{};
     int overlay_texture_width_{};
     int overlay_texture_height_{};
     double overlay_refresh_accumulator_{};
+    double simulation_time_{};
     bool paused_{};
     bool show_overlay_{true};
     bool overlay_dirty_{true};

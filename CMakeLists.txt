@@ -28,6 +28,19 @@ include(Flock3DDependencies)
 
 flock3d_fetch_dependencies()
 
+
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE FLOCK3D_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT FLOCK3D_GIT_COMMIT)
+    set(FLOCK3D_GIT_COMMIT "unknown")
+endif()
+add_compile_definitions(FLOCK3D_GIT_COMMIT="${FLOCK3D_GIT_COMMIT}")
+
 add_subdirectory(src)
 add_subdirectory(benchmarks)
 

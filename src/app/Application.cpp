@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <random>
+#include <string>
 
 #include <raylib.h>
 
@@ -46,6 +47,7 @@ Application::Application()
 
 Application::~Application()
 {
+    recorder_.stop(simulation_time_, simulation_.size(), metrics_);
     unload_overlay_texture();
     if (IsWindowReady()) {
         CloseWindow();
@@ -69,6 +71,8 @@ void Application::run()
                 const auto simulation_start = Clock::now();
                 simulation_.update(static_cast<float>(timestep_.fixed_dt()), &metrics_);
                 metrics_.simulation_update_ms = elapsed_ms(simulation_start, Clock::now());
+                simulation_time_ += timestep_.fixed_dt();
+                recorder_.record_step(simulation_time_, simulation_.size(), metrics_);
             }
         }
 
@@ -113,6 +117,7 @@ void Application::handle_input()
     }
     if (simulation_input.reset) {
         metrics_ = sim::SimulationMetrics{};
+        simulation_time_ = 0.0;
     }
 
     if (IsKeyPressed(KEY_PERIOD)) {
@@ -125,6 +130,22 @@ void Application::handle_input()
     }
     if (IsKeyPressed(KEY_N)) {
         randomize_current_seed();
+        changed = true;
+    }
+    if (IsKeyPressed(KEY_O)) {
+        toggle_recording();
+        changed = true;
+    }
+    if (IsKeyPressed(KEY_M)) {
+        cycle_export_mode();
+        changed = true;
+    }
+    if (IsKeyPressed(KEY_PAGE_UP)) {
+        adjust_sample_rate(2.0);
+        changed = true;
+    }
+    if (IsKeyPressed(KEY_PAGE_DOWN)) {
+        adjust_sample_rate(0.5);
         changed = true;
     }
 
@@ -143,12 +164,14 @@ void Application::apply_scenario(sim::ScenarioType type)
     active_scenario_ = sim::build_scenario(type);
     simulation_.apply_parameters(active_scenario_.simulation_parameters);
     metrics_ = sim::SimulationMetrics{};
+    simulation_time_ = 0.0;
 }
 
 void Application::reset_current_scenario()
 {
     simulation_.reset();
     metrics_ = sim::SimulationMetrics{};
+    simulation_time_ = 0.0;
 }
 
 void Application::randomize_current_seed()
@@ -157,6 +180,50 @@ void Application::randomize_current_seed()
     active_scenario_.simulation_parameters.random_seed = random_device();
     simulation_.parameters().random_seed = active_scenario_.simulation_parameters.random_seed;
     reset_current_scenario();
+}
+
+
+void Application::toggle_recording()
+{
+    if (recorder_.is_recording()) {
+        recorder_.stop(simulation_time_, simulation_.size(), metrics_);
+        return;
+    }
+
+    const auto output_path = experiment::default_output_path(active_scenario_.type, recorder_.export_mode());
+    recorder_.start(
+        output_path,
+        active_scenario_.type,
+        simulation_.parameters().random_seed,
+        recorder_.export_mode(),
+        recorder_.sample_rate_hz());
+}
+
+void Application::cycle_export_mode()
+{
+    if (recorder_.is_recording()) {
+        return;
+    }
+
+    switch (recorder_.export_mode()) {
+    case experiment::ExportMode::Summary:
+        recorder_.set_export_mode(experiment::ExportMode::SampledTimeSeries);
+        break;
+    case experiment::ExportMode::SampledTimeSeries:
+        recorder_.set_export_mode(experiment::ExportMode::FullTrajectory);
+        break;
+    case experiment::ExportMode::FullTrajectory:
+        recorder_.set_export_mode(experiment::ExportMode::Summary);
+        break;
+    }
+}
+
+void Application::adjust_sample_rate(double scale) noexcept
+{
+    if (recorder_.is_recording()) {
+        return;
+    }
+    recorder_.set_sample_rate_hz(std::clamp(recorder_.sample_rate_hz() * scale, 0.25, 120.0));
 }
 
 void Application::refresh_overlay_text(float frame_time_ms)
@@ -206,11 +273,23 @@ void Application::refresh_overlay_text(float frame_time_ms)
         static_cast<double>(metrics_.dispersion));
     write_line(overlay_lines_[line++], "Nearest neighbor avg %.2f", static_cast<double>(metrics_.nearest_neighbor_average_distance));
     write_literal(overlay_lines_[line++], "");
+    write_literal(overlay_lines_[line++], "Metrics export");
+    write_line(
+        overlay_lines_[line++],
+        "Recording %-3s  Mode %.*s",
+        recorder_.is_recording() ? "on" : "off",
+        static_cast<int>(experiment::to_string(recorder_.export_mode()).size()),
+        experiment::to_string(recorder_.export_mode()).data());
+    write_line(overlay_lines_[line++], "Sample rate %.2f Hz", recorder_.sample_rate_hz());
+    const auto output_filename = recorder_.output_path().empty() ? std::string{"(none)"} : recorder_.output_path().filename().string();
+    write_line(overlay_lines_[line++], "Output %.70s", output_filename.c_str());
+    write_literal(overlay_lines_[line++], "");
     write_literal(overlay_lines_[line++], "Controls");
     write_literal(overlay_lines_[line++], "Camera  WASD move, Space up, Ctrl/C down");
     write_literal(overlay_lines_[line++], "        RMB look, Shift boost, wheel speed");
     write_literal(overlay_lines_[line++], "Sim     P pause, R reset, +/- boids, N seed");
     write_literal(overlay_lines_[line++], "Scenario , previous, . next");
+    write_literal(overlay_lines_[line++], "Export  O record, M mode, PgUp/PgDn rate");
     write_literal(overlay_lines_[line++], "Tune    Tab/Shift+Tab, Left/Right, 1-8");
     write_literal(overlay_lines_[line++], "");
     write_line(
