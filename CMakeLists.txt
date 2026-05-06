@@ -13,6 +13,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+# Keep executable outputs deterministic across generators.
+# This avoids stale binaries from older CMake target layouts.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+foreach(CONFIG Debug Release RelWithDebInfo MinSizeRel)
+    string(TOUPPER "${CONFIG}" CONFIG_UPPER)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${CONFIG_UPPER} "${CMAKE_BINARY_DIR}/bin")
+endforeach()
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(Flock3DWarnings)
 include(Flock3DDependencies)
