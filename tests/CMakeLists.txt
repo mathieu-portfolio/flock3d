@@ -1,6 +1,7 @@
 set(flock3d_test_sources
     test_spatial_hash.cpp
     test_simulation.cpp
+    test_controls.cpp
 )
 
 add_executable(flock3d_tests ${flock3d_test_sources})

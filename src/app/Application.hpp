@@ -4,6 +4,9 @@
 
 #include <raylib.h>
 
+#include "app/CameraController.hpp"
+#include "app/DebugControls.hpp"
+#include "app/SimulationControls.hpp"
 #include "render/BoidRenderer.hpp"
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
@@ -26,16 +29,17 @@ public:
 private:
     static constexpr int screen_width = 1280;
     static constexpr int screen_height = 720;
-    static constexpr std::size_t overlay_line_count = 19;
+    static constexpr std::size_t overlay_line_count = 21;
 
     void handle_input();
-    void adjust_boid_count(int delta);
-    void reset_simulation();
     void mark_overlay_dirty() noexcept;
     void refresh_overlay_text(float frame_time_ms);
     void draw_overlay() const;
 
     Camera3D camera_{};
+    CameraController camera_controller_{};
+    SimulationControls simulation_controls_{};
+    DebugControls debug_controls_{};
     sim::BoidSimulation simulation_{};
     sim::FixedTimestepAccumulator timestep_{1.0 / 120.0};
     sim::SimulationMetrics metrics_{};

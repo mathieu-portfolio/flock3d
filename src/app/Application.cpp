@@ -16,11 +16,6 @@ using Clock = std::chrono::steady_clock;
     return std::chrono::duration<double, std::milli>{end - start}.count();
 }
 
-[[nodiscard]] bool shift_down() noexcept
-{
-    return IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-}
-
 void write_literal(std::array<char, 96>& line, const char* text)
 {
     std::snprintf(line.data(), line.size(), "%s", text);
@@ -29,11 +24,6 @@ void write_literal(std::array<char, 96>& line, const char* text)
 void write_line(std::array<char, 96>& line, const char* format, auto... args)
 {
     std::snprintf(line.data(), line.size(), format, args...);
-}
-
-void adjust_float(float& value, float delta, float minimum, float maximum) noexcept
-{
-    value = std::clamp(value + delta, minimum, maximum);
 }
 
 } // namespace
@@ -50,7 +40,7 @@ Application::Application()
     camera_.fovy = 45.0F;
     camera_.projection = CAMERA_PERSPECTIVE;
 
-    DisableCursor();
+    camera_controller_.initialize_from_camera(camera_);
 }
 
 Application::~Application()
@@ -67,7 +57,9 @@ void Application::run()
         const float frame_time_ms = frame_time * 1000.0F;
 
         handle_input();
-        UpdateCamera(&camera_, CAMERA_FREE);
+        if (camera_controller_.update(camera_, frame_time)) {
+            mark_overlay_dirty();
+        }
 
         if (!paused_) {
             timestep_.add_frame_time(frame_time);
@@ -105,68 +97,18 @@ void Application::run()
 void Application::handle_input()
 {
     bool changed = false;
-    auto& parameters = simulation_.parameters();
 
-    if (IsKeyPressed(KEY_F1)) {
-        show_overlay_ = !show_overlay_;
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_SPACE)) {
-        paused_ = !paused_;
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_R)) {
-        reset_simulation();
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) {
-        adjust_boid_count(128);
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) {
-        adjust_boid_count(-128);
-        changed = true;
-    }
+    changed = debug_controls_.handle_input(show_overlay_) || changed;
 
-    if (IsKeyPressed(KEY_ONE)) {
-        adjust_float(parameters.separation_weight, shift_down() ? -0.1F : 0.1F, 0.0F, 10.0F);
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_TWO)) {
-        adjust_float(parameters.alignment_weight, shift_down() ? -0.1F : 0.1F, 0.0F, 10.0F);
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_THREE)) {
-        adjust_float(parameters.cohesion_weight, shift_down() ? -0.1F : 0.1F, 0.0F, 10.0F);
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_FOUR)) {
-        adjust_float(parameters.neighbor_radius, shift_down() ? -0.25F : 0.25F, 0.5F, 30.0F);
-        changed = true;
-    }
-    if (IsKeyPressed(KEY_FIVE)) {
-        adjust_float(parameters.max_speed, shift_down() ? -0.5F : 0.5F, 0.5F, 80.0F);
-        changed = true;
+    const auto simulation_input = simulation_controls_.handle_input(simulation_, paused_);
+    changed = simulation_input.changed || changed;
+    if (simulation_input.reset) {
+        metrics_ = sim::SimulationMetrics{};
     }
 
     if (changed) {
         mark_overlay_dirty();
     }
-}
-
-void Application::adjust_boid_count(int delta)
-{
-    auto& parameters = simulation_.parameters();
-    const auto current = static_cast<int>(simulation_.size());
-    const auto next = std::clamp(current + delta, 0, 100'000);
-    parameters.boid_count = static_cast<unsigned int>(next);
-    simulation_.reset(parameters.boid_count);
-}
-
-void Application::reset_simulation()
-{
-    simulation_.reset(simulation_.parameters().boid_count);
-    metrics_ = sim::SimulationMetrics{};
 }
 
 void Application::mark_overlay_dirty() noexcept
@@ -177,27 +119,32 @@ void Application::mark_overlay_dirty() noexcept
 void Application::refresh_overlay_text(float frame_time_ms)
 {
     const auto& parameters = simulation_.parameters();
+    const auto selected = simulation_controls_.selected_parameter();
+    const auto& selected_descriptor = descriptor_for(selected);
+    const auto selected_value = parameter_value(parameters, selected);
     std::size_t line = 0;
 
     write_literal(overlay_lines_[line++], "flock3d debug overlay");
-    write_line(overlay_lines_[line++], "FPS: %d", GetFPS());
-    write_line(overlay_lines_[line++], "Frame: %.2f ms", static_cast<double>(frame_time_ms));
-    write_line(overlay_lines_[line++], "Boids: %zu", simulation_.size());
-    write_line(overlay_lines_[line++], "Avg neighbors/boid: %.2f", static_cast<double>(metrics_.average_neighbors_per_boid));
-    write_line(overlay_lines_[line++], "Sim update: %.3f ms", metrics_.simulation_update_ms);
-    write_line(overlay_lines_[line++], "Render: %.3f ms", metrics_.render_ms);
-    write_line(overlay_lines_[line++], "Spatial cells: %zu", metrics_.spatial_hash_cell_count);
-    write_line(overlay_lines_[line++], "Neighbor queries: %llu", static_cast<unsigned long long>(metrics_.neighbor_queries));
+    write_line(overlay_lines_[line++], "FPS %d | frame %.2f ms | %s", GetFPS(), static_cast<double>(frame_time_ms), paused_ ? "paused" : "running");
+    write_line(overlay_lines_[line++], "Boids: %zu | avg neighbors: %.2f", simulation_.size(), static_cast<double>(metrics_.average_neighbors_per_boid));
+    write_line(overlay_lines_[line++], "Sim %.3f ms | render %.3f ms", metrics_.simulation_update_ms, metrics_.render_ms);
+    write_line(overlay_lines_[line++], "Cells: %zu | queries: %llu", metrics_.spatial_hash_cell_count, static_cast<unsigned long long>(metrics_.neighbor_queries));
+    write_line(overlay_lines_[line++], "Camera speed: %.1f (wheel adjusts)", static_cast<double>(camera_controller_.move_speed()));
     write_literal(overlay_lines_[line++], "");
-    write_literal(overlay_lines_[line++], "Parameters");
-    write_line(overlay_lines_[line++], "1/Shift+1 separation: %.2f", static_cast<double>(parameters.separation_weight));
-    write_line(overlay_lines_[line++], "2/Shift+2 alignment: %.2f", static_cast<double>(parameters.alignment_weight));
-    write_line(overlay_lines_[line++], "3/Shift+3 cohesion: %.2f", static_cast<double>(parameters.cohesion_weight));
-    write_line(overlay_lines_[line++], "4/Shift+4 perception: %.2f", static_cast<double>(parameters.neighbor_radius));
-    write_line(overlay_lines_[line++], "5/Shift+5 max speed: %.2f", static_cast<double>(parameters.max_speed));
+    write_literal(overlay_lines_[line++], "Camera: WASD move, Space up, Ctrl/C down");
+    write_literal(overlay_lines_[line++], "        RMB look, Shift boost, wheel speed");
+    write_literal(overlay_lines_[line++], "Sim: P pause, R reset, +/- boids");
+    write_literal(overlay_lines_[line++], "Tune: 1-8 select, [/] adjust selected");
+    write_line(overlay_lines_[line++], "Selected: %.*s = %.2f", static_cast<int>(selected_descriptor.label.size()), selected_descriptor.label.data(), static_cast<double>(selected_value));
     write_literal(overlay_lines_[line++], "");
-    write_line(overlay_lines_[line++], "Controls: +/- boids, Space %s", paused_ ? "resume" : "pause");
-    write_literal(overlay_lines_[line++], "R reset, F1 overlay, WASD/mouse camera");
+    write_line(overlay_lines_[line++], "1 sep %.2f | 2 align %.2f", static_cast<double>(parameters.separation_weight), static_cast<double>(parameters.alignment_weight));
+    write_line(overlay_lines_[line++], "3 coh %.2f | 4 percept %.2f", static_cast<double>(parameters.cohesion_weight), static_cast<double>(parameters.neighbor_radius));
+    write_line(overlay_lines_[line++], "5 sep radius %.2f | 6 max speed %.2f", static_cast<double>(parameters.separation_radius), static_cast<double>(parameters.max_speed));
+    write_line(overlay_lines_[line++], "7 max force %.2f | 8 scale %.2f", static_cast<double>(parameters.max_force), static_cast<double>(parameters.boid_scale));
+    write_literal(overlay_lines_[line++], "");
+    write_literal(overlay_lines_[line++], "Debug: F1 toggle overlay");
+    write_literal(overlay_lines_[line++], "World: free-fly camera, deterministic sim");
+    write_literal(overlay_lines_[line++], "");
 
     overlay_refresh_accumulator_ = 0.0;
     overlay_dirty_ = false;
