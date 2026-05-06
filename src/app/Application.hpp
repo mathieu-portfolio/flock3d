@@ -3,8 +3,8 @@
 #include <raylib.h>
 
 #include "render/BoidRenderer.hpp"
-#include "sim/BoidSimulation.hpp"
-#include "sim/SimulationParameters.hpp"
+#include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/SimulationParameters.hpp>
 
 namespace flock3d::app {
 
