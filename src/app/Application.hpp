@@ -10,6 +10,7 @@
 #include <flock3d/app/OverlayLayout.hpp>
 #include "render/BoidRenderer.hpp"
 #include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/Scenario.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 
@@ -36,6 +37,9 @@ private:
     void handle_input();
     void mark_overlay_dirty() noexcept;
     void refresh_overlay_text(float frame_time_ms);
+    void apply_scenario(sim::ScenarioType type);
+    void reset_current_scenario();
+    void randomize_current_seed();
     void render_overlay_texture();
     void draw_overlay();
     void draw_overlay_primitives(int origin_x, int origin_y) const;
@@ -46,7 +50,8 @@ private:
     CameraController camera_controller_{};
     SimulationControls simulation_controls_{};
     DebugControls debug_controls_{};
-    sim::BoidSimulation simulation_{};
+    sim::ScenarioDefinition active_scenario_{sim::build_scenario(sim::ScenarioType::ClassicBoids)};
+    sim::BoidSimulation simulation_{active_scenario_.simulation_parameters};
     sim::FixedTimestepAccumulator timestep_{1.0 / 120.0};
     sim::SimulationMetrics metrics_{};
     render::BoidRenderer renderer_{};

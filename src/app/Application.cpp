@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <random>
 
 #include <raylib.h>
 
@@ -107,8 +108,24 @@ void Application::handle_input()
 
     const auto simulation_input = simulation_controls_.handle_input(simulation_, paused_);
     changed = simulation_input.changed || changed;
+    if (simulation_input.changed) {
+        active_scenario_.simulation_parameters = simulation_.parameters();
+    }
     if (simulation_input.reset) {
         metrics_ = sim::SimulationMetrics{};
+    }
+
+    if (IsKeyPressed(KEY_PERIOD)) {
+        apply_scenario(sim::next_scenario_type(active_scenario_.type));
+        changed = true;
+    }
+    if (IsKeyPressed(KEY_COMMA)) {
+        apply_scenario(sim::previous_scenario_type(active_scenario_.type));
+        changed = true;
+    }
+    if (IsKeyPressed(KEY_N)) {
+        randomize_current_seed();
+        changed = true;
     }
 
     if (changed) {
@@ -121,6 +138,27 @@ void Application::mark_overlay_dirty() noexcept
     overlay_dirty_ = true;
 }
 
+void Application::apply_scenario(sim::ScenarioType type)
+{
+    active_scenario_ = sim::build_scenario(type);
+    simulation_.apply_parameters(active_scenario_.simulation_parameters);
+    metrics_ = sim::SimulationMetrics{};
+}
+
+void Application::reset_current_scenario()
+{
+    simulation_.reset();
+    metrics_ = sim::SimulationMetrics{};
+}
+
+void Application::randomize_current_seed()
+{
+    std::random_device random_device;
+    active_scenario_.simulation_parameters.random_seed = random_device();
+    simulation_.parameters().random_seed = active_scenario_.simulation_parameters.random_seed;
+    reset_current_scenario();
+}
+
 void Application::refresh_overlay_text(float frame_time_ms)
 {
     const auto& parameters = simulation_.parameters();
@@ -129,21 +167,58 @@ void Application::refresh_overlay_text(float frame_time_ms)
     const auto selected_value = parameter_value(parameters, selected);
     std::size_t line = 0;
 
-    write_literal(overlay_lines_[line++], "flock3d debug overlay");
-    write_line(overlay_lines_[line++], "FPS %d    frame %.2f ms    %s", GetFPS(), static_cast<double>(frame_time_ms), paused_ ? "paused" : "running");
-    write_line(overlay_lines_[line++], "Boids %-6zu   avg neighbors %.2f", simulation_.size(), static_cast<double>(metrics_.average_neighbors_per_boid));
+    write_literal(overlay_lines_[line++], "flock3d scientific overlay");
+    write_line(
+        overlay_lines_[line++],
+        "Scenario %.*s",
+        static_cast<int>(active_scenario_.display_name.size()),
+        active_scenario_.display_name.data());
+    write_line(
+        overlay_lines_[line++],
+        "Seed %u    FPS %d    %.2f ms    %s",
+        parameters.random_seed,
+        GetFPS(),
+        static_cast<double>(frame_time_ms),
+        paused_ ? "paused" : "running");
+    write_line(
+        overlay_lines_[line++],
+        "Boids %-6zu   avg neighbors %.2f",
+        simulation_.size(),
+        static_cast<double>(metrics_.average_neighbors_per_boid));
     write_line(overlay_lines_[line++], "Sim %.3f ms    Render %.3f ms", metrics_.simulation_update_ms, metrics_.render_ms);
-    write_line(overlay_lines_[line++], "Cells %-6zu   Queries %llu", metrics_.spatial_hash_cell_count, static_cast<unsigned long long>(metrics_.neighbor_queries));
+    write_line(
+        overlay_lines_[line++],
+        "Cells %-6zu   Queries %llu",
+        metrics_.spatial_hash_cell_count,
+        static_cast<unsigned long long>(metrics_.neighbor_queries));
     write_line(overlay_lines_[line++], "Camera speed %.1f (mouse wheel)", static_cast<double>(camera_controller_.move_speed()));
+    write_literal(overlay_lines_[line++], "");
+    write_literal(overlay_lines_[line++], "Collective behavior");
+    write_line(
+        overlay_lines_[line++],
+        "Polarization %.3f   Avg speed %.2f",
+        static_cast<double>(metrics_.polarization),
+        static_cast<double>(metrics_.average_speed));
+    write_line(
+        overlay_lines_[line++],
+        "Cohesion %.2f       Dispersion %.2f",
+        static_cast<double>(metrics_.cohesion),
+        static_cast<double>(metrics_.dispersion));
+    write_line(overlay_lines_[line++], "Nearest neighbor avg %.2f", static_cast<double>(metrics_.nearest_neighbor_average_distance));
     write_literal(overlay_lines_[line++], "");
     write_literal(overlay_lines_[line++], "Controls");
     write_literal(overlay_lines_[line++], "Camera  WASD move, Space up, Ctrl/C down");
     write_literal(overlay_lines_[line++], "        RMB look, Shift boost, wheel speed");
-    write_literal(overlay_lines_[line++], "Sim     P pause, R reset, +/- boids");
-    write_literal(overlay_lines_[line++], "Tune    Tab selects, Left/Right adjusts");
-    write_literal(overlay_lines_[line++], "        Shift+Tab back, 1-8 quick select");
+    write_literal(overlay_lines_[line++], "Sim     P pause, R reset, +/- boids, N seed");
+    write_literal(overlay_lines_[line++], "Scenario , previous, . next");
+    write_literal(overlay_lines_[line++], "Tune    Tab/Shift+Tab, Left/Right, 1-8");
     write_literal(overlay_lines_[line++], "");
-    write_line(overlay_lines_[line++], "Parameters    selected: %.*s = %.2f", static_cast<int>(selected_descriptor.label.size()), selected_descriptor.label.data(), static_cast<double>(selected_value));
+    write_line(
+        overlay_lines_[line++],
+        "Parameters    selected: %.*s = %.2f",
+        static_cast<int>(selected_descriptor.label.size()),
+        selected_descriptor.label.data(),
+        static_cast<double>(selected_value));
     write_line(overlay_lines_[line++], "1  Separation weight   %.2f", static_cast<double>(parameters.separation_weight));
     write_line(overlay_lines_[line++], "2  Alignment weight    %.2f", static_cast<double>(parameters.alignment_weight));
     write_line(overlay_lines_[line++], "3  Cohesion weight     %.2f", static_cast<double>(parameters.cohesion_weight));

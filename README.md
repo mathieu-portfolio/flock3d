@@ -1,6 +1,6 @@
 # flock3d
 
-`flock3d` is a modern C++20 real-time 3D boids simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The project starts deliberately small: it opens a raylib-powered 3D window, advances a fixed-timestep simulation at 120 Hz, and renders simple moving boids inside a wrapped world volume.
+`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, and quantitative flock metrics so future bird, fish, predator/prey, obstacle, leadership, and noise models can be added as isolated scenarios instead of ad-hoc flags.
 
 ## Features
 
@@ -12,7 +12,9 @@
 - **Simulation/rendering separation** so flock behavior can evolve without coupling to drawing code.
 - **Data-oriented SoA storage** for boid positions, velocities, and accelerations.
 - **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, and boid count.
-- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, and neighbor-query behavior.
+- **Scenario definitions** with display text, default simulation parameters, environment settings, constraints, behavior settings, metric settings, and deterministic seeds.
+- **Reproducible seed handling** so resetting a scenario with the same seed recreates the same initial boid positions and velocities.
+- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, and collective-behavior order parameters.
 - **Configurable directional boid scale** via simulation parameters.
 - **Uniform 3D spatial hash** for allocation-light neighbor queries during the simulation step.
 - **No ECS framework** and no unnecessary inheritance.
@@ -90,6 +92,22 @@ std::vector<Vector3> accelerations;
 
 This keeps the initial implementation simple while preserving a path toward cache-friendly update passes, batched neighbor queries, and future SIMD-friendly code.
 
+## v2 scientific scenarios
+
+The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. Only **Classic Boids** has bespoke behavior in v2; the remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
+
+Current scenarios:
+
+- **Classic Boids**: baseline Reynolds-style separation, alignment, and cohesion in a wrapped 3D world.
+- **Bird Flight**: placeholder for future avian flight constraints, lift, and gravity-aware motion.
+- **Fish School**: placeholder for future aquatic schooling and drag.
+- **Predator-Prey**: placeholder for future predator/prey roles and pursuit/evasion.
+- **Obstacle Avoidance**: placeholder for future obstacle fields and avoidance responses.
+- **Leadership**: placeholder for future informed-leader experiments.
+- **Noise Experiment**: placeholder for future controlled noise sweeps.
+
+Each scenario stores its default seed. Switching scenarios applies its default parameters and resets the simulation from that scenario seed. Pressing reset recreates the current scenario state with the current seed; pressing the randomize-seed control assigns a new seed and resets immediately.
+
 ## What are boids?
 
 Boids are a classic model of emergent flocking behavior. Each agent follows a few local steering rules:
@@ -103,15 +121,15 @@ Boids are a classic model of emergent flocking behavior. Each agent follows a fe
 ## Controls
 
 - `W/A/S/D` + mouse: free camera controls through raylib.
-- `Space`: pause or resume fixed-timestep simulation updates.
-- `R`: reset the simulation with the current boid count and random seed.
+- `P`: pause or resume fixed-timestep simulation updates.
+- `R`: reset the simulation with the current boid count and seed.
+- `N`: randomize the current scenario seed and reset.
+- `,` / `.`: switch to the previous or next scenario, applying that scenario's default parameters and seed.
 - `F1`: toggle the debug/metrics overlay.
 - `+` / `-` or keypad `+` / `-`: increase or decrease boid count in batches of 128.
-- `1` / `Shift+1`: increase or decrease separation weight.
-- `2` / `Shift+2`: increase or decrease alignment weight.
-- `3` / `Shift+3`: increase or decrease cohesion weight.
-- `4` / `Shift+4`: increase or decrease perception radius.
-- `5` / `Shift+5`: increase or decrease max speed.
+- `Tab` / `Shift+Tab`: cycle the selected tunable parameter.
+- `Left` / `Right` or `[` / `]`: decrease or increase the selected tunable parameter.
+- `1`-`8`: select separation weight, alignment weight, cohesion weight, perception radius, separation radius, max speed, max force, or boid scale.
 - `Esc`: close the window.
 
 ## Debug overlay and metrics
@@ -120,14 +138,21 @@ The `F1` overlay is intentionally compact and rendered with raylib text primitiv
 
 Displayed metrics include:
 
+- **Active scenario and seed**: the current scientific scenario name and the seed used for reproducible initialization.
 - **FPS and frame time**: current render-loop throughput and frame duration.
 - **Boid count**: active agents in the simulation after runtime adjustments.
 - **Average neighbors per boid**: effective flock neighbors, excluding the boid itself, divided by boid count for the latest fixed simulation step.
+- **Polarization / global alignment order**: magnitude of the average normalized velocity vector; values near `1.0` indicate aligned motion and values near `0.0` indicate disordered or opposing headings.
+- **Cohesion**: average distance from each boid to the flock center of mass.
+- **Dispersion**: root-mean-square distance from each boid to the flock center of mass.
+- **Average speed**: mean velocity magnitude across all boids.
+- **Nearest-neighbor average distance**: average nearest observed neighbor distance gathered during the existing spatial-hash neighbor queries.
+- **Cluster count**: reserved as a TODO metric until connectivity semantics are defined for scenario-specific models.
 - **Simulation update time**: wall-clock duration of the most recent fixed simulation update.
 - **Render time**: wall-clock duration of the most recent 3D draw pass.
 - **Spatial hash cell count**: occupied cells after the latest hash rebuild.
 - **Neighbor queries**: number of spatial neighbor queries issued by the latest fixed simulation step.
-- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, and max speed.
+- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, separation radius, max speed, max force, and boid scale.
 
 ## Screenshots
 
@@ -135,7 +160,10 @@ Screenshots and capture notes for the debug overlay and larger flock scenarios w
 
 ## Roadmap
 
+- Implement isolated bird-flight, fish-school, predator/prey, obstacle-avoidance, leadership, and noise behavior models.
 - Add deterministic scenario fixtures for simulation regression tests.
+- Define cluster-count connectivity semantics for scientific metrics.
+- Add CSV export for repeatable experiment runs.
 - Expand the spatial hash to support reusable neighbor buffers.
 - Add benchmarks for hash construction and simulation update passes.
 - Explore instanced rendering for larger flocks.
