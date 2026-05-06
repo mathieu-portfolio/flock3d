@@ -6,11 +6,12 @@
 
 - **Modern C++20** with small, focused translation units.
 - **Modular CMake + FetchContent** for cross-platform dependency management.
-- **raylib** rendering with a free 3D camera and FPS counter.
+- **raylib** rendering with a free 3D camera, FPS counter, and velocity-oriented boid tetrahedrons.
 - **Catch2** tests for spatial hashing, wrapping, and fixed-timestep behavior.
 - **Deterministic fixed timestep** simulation loop at 120 Hz.
 - **Simulation/rendering separation** so flock behavior can evolve without coupling to drawing code.
 - **Data-oriented SoA storage** for boid positions, velocities, and accelerations.
+- **Configurable directional boid scale** via simulation parameters.
 - **Uniform 3D spatial hash** skeleton for future neighbor queries.
 - **No ECS framework** and no unnecessary inheritance.
 
