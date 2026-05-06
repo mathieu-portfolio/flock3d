@@ -47,6 +47,8 @@ private:
     void render_overlay_texture();
     void draw_overlay();
     void draw_overlay_primitives(int origin_x, int origin_y) const;
+    void draw_overlay_scrollbar(const OverlayRect& panel, int visible_height, int max_scroll) const;
+    [[nodiscard]] bool update_overlay_scroll();
     bool ensure_overlay_texture();
     void unload_overlay_texture() noexcept;
 
@@ -66,10 +68,12 @@ private:
     int overlay_texture_height_{};
     double overlay_refresh_accumulator_{};
     double simulation_time_{};
+    int overlay_scroll_offset_{};
     bool paused_{};
     bool show_overlay_{true};
     bool overlay_dirty_{true};
     bool overlay_texture_ready_{};
+    bool overlay_consumed_wheel_{};
 };
 
 } // namespace flock3d::app
