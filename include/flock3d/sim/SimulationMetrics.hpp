@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 
@@ -11,6 +12,15 @@ struct SimulationMetrics {
     std::uint64_t neighbor_queries{};
     std::uint64_t neighbor_candidates{};
     std::uint64_t neighbor_total{};
+    double avg_candidates_per_query{};
+    std::size_t max_candidates_per_query{};
+    double avg_effective_neighbors_per_query{};
+    std::size_t max_effective_neighbors_per_query{};
+    std::uint64_t visited_cells_total{};
+    double visited_cells_per_query{};
+    std::size_t spatial_cell_count{};
+    double avg_cell_occupancy{};
+    std::size_t max_cell_occupancy{};
     float average_neighbors_per_boid{};
     float polarization{};
     float cohesion{};
@@ -32,6 +42,15 @@ struct SimulationMetrics {
         neighbor_queries = 0;
         neighbor_candidates = 0;
         neighbor_total = 0;
+        avg_candidates_per_query = 0.0;
+        max_candidates_per_query = 0;
+        avg_effective_neighbors_per_query = 0.0;
+        max_effective_neighbors_per_query = 0;
+        visited_cells_total = 0;
+        visited_cells_per_query = 0.0;
+        spatial_cell_count = 0;
+        avg_cell_occupancy = 0.0;
+        max_cell_occupancy = 0;
         average_neighbors_per_boid = 0.0F;
         polarization = 0.0F;
         cohesion = 0.0F;
@@ -48,15 +67,18 @@ struct SimulationMetrics {
         nearest_neighbor_distance_count = 0;
     }
 
-    constexpr void record_neighbor_query(std::size_t candidate_count) noexcept
+    constexpr void record_neighbor_query(std::size_t candidate_count, std::size_t visited_cells = 0) noexcept
     {
         ++neighbor_queries;
         neighbor_candidates += candidate_count;
+        max_candidates_per_query = std::max(max_candidates_per_query, candidate_count);
+        visited_cells_total += visited_cells;
     }
 
     constexpr void record_effective_neighbors(std::size_t neighbor_count) noexcept
     {
         neighbor_total += neighbor_count;
+        max_effective_neighbors_per_query = std::max(max_effective_neighbors_per_query, neighbor_count);
     }
 
     constexpr void record_nearest_neighbor_distance(float distance) noexcept
@@ -89,9 +111,25 @@ struct SimulationMetrics {
         near_ground_count = step_near_ground_count;
     }
 
-    constexpr void finish_simulation_step(std::size_t boid_count, std::size_t cell_count) noexcept
+    constexpr void finish_simulation_step(
+        std::size_t boid_count,
+        std::size_t cell_count,
+        double average_occupancy,
+        std::size_t maximum_occupancy) noexcept
     {
+        spatial_cell_count = cell_count;
         spatial_hash_cell_count = cell_count;
+        avg_cell_occupancy = average_occupancy;
+        max_cell_occupancy = maximum_occupancy;
+        avg_candidates_per_query = neighbor_queries > 0
+            ? static_cast<double>(neighbor_candidates) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        avg_effective_neighbors_per_query = neighbor_queries > 0
+            ? static_cast<double>(neighbor_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        visited_cells_per_query = neighbor_queries > 0
+            ? static_cast<double>(visited_cells_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
         average_neighbors_per_boid = boid_count > 0
             ? static_cast<float>(neighbor_total) / static_cast<float>(boid_count)
             : 0.0F;

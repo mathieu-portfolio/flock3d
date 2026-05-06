@@ -13,8 +13,8 @@ struct OverlayLayout {
     int padding{14};
     int font_size{16};
     int panel_width{520};
-    std::size_t line_count{41};
-    std::size_t parameter_line_start{29};
+    std::size_t line_count{45};
+    std::size_t parameter_line_start{33};
 };
 
 struct OverlayRect {
@@ -61,7 +61,7 @@ struct OverlayRect {
 
 [[nodiscard]] constexpr bool overlay_is_section_header(std::size_t line_index) noexcept
 {
-    return line_index == 0 || line_index == 8 || line_index == 15 || line_index == 20 || line_index == 28;
+    return line_index == 0 || line_index == 12 || line_index == 19 || line_index == 24 || line_index == 32;
 }
 
 } // namespace flock3d::app

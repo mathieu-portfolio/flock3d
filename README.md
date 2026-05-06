@@ -137,6 +137,15 @@ Boids are a classic model of emergent flocking behavior. Each agent follows a fe
 
 `flock3d` implements those local forces and exposes their weights at runtime so you can see how each rule changes the flock while watching the accompanying performance metrics.
 
+
+## Spatial hash performance diagnostics
+
+The debug overlay separates expected neighbor-query volume from spatial-hash efficiency. The query count should match the boid count during each simulation step because every boid performs exactly one neighbor query; a constant query count is therefore expected and is not by itself a lag signal.
+
+The key metric is **candidates per query**: it counts how many boid entries the spatial hash had to test from visited cells before the boid rules accept effective neighbors. High candidate counts, high maximum cell occupancy, or very dense occupied cells point to a hash or parameter bottleneck even when the effective neighbor count remains modest. In 3D, increasing perception radius expands the visited cell volume rapidly, so large perception radii can multiply checked cells and candidates much faster than they would in a 2D setup.
+
+Use these diagnostics first to distinguish render-bound frames from simulation-bound frames and to tune cell size, boid density, and perception radius. Parallelization should come after these measurements identify the bottleneck, not before.
+
 ## Controls
 
 - `W/A/S/D` + mouse: free camera controls through raylib.

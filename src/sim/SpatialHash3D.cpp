@@ -1,5 +1,6 @@
 #include <flock3d/sim/SpatialHash3D.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -50,7 +51,18 @@ std::vector<std::size_t> SpatialHash3D::query_neighbors(Vector3 position, float 
 
 void SpatialHash3D::query_neighbors(Vector3 position, float radius, std::vector<std::size_t>& result) const
 {
+    NeighborQueryDiagnostics diagnostics{};
+    query_neighbors(position, radius, result, diagnostics);
+}
+
+void SpatialHash3D::query_neighbors(
+    Vector3 position,
+    float radius,
+    std::vector<std::size_t>& result,
+    NeighborQueryDiagnostics& diagnostics) const
+{
     result.clear();
+    diagnostics = NeighborQueryDiagnostics{};
     if (radius < 0.0F) {
         return;
     }
@@ -62,11 +74,13 @@ void SpatialHash3D::query_neighbors(Vector3 position, float radius, std::vector<
     for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
             for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
+                ++diagnostics.visited_cells;
                 const auto found = cells_.find(CellCoord{x, y, z});
                 if (found == cells_.end()) {
                     continue;
                 }
 
+                diagnostics.candidates_tested += found->second.size();
                 for (const Entry& entry : found->second) {
                     const auto offset = math::subtract(entry.position, position);
                     if (math::length_squared(offset) <= radius_squared) {
@@ -76,6 +90,29 @@ void SpatialHash3D::query_neighbors(Vector3 position, float radius, std::vector<
             }
         }
     }
+}
+
+std::size_t SpatialHash3D::max_cell_occupancy() const noexcept
+{
+    std::size_t maximum = 0;
+    for (const auto& cell : cells_) {
+        maximum = std::max(maximum, cell.second.size());
+    }
+    return maximum;
+}
+
+double SpatialHash3D::average_cell_occupancy() const noexcept
+{
+    return cells_.empty() ? 0.0 : static_cast<double>(total_entries()) / static_cast<double>(cells_.size());
+}
+
+std::size_t SpatialHash3D::total_entries() const noexcept
+{
+    std::size_t total = 0;
+    for (const auto& cell : cells_) {
+        total += cell.second.size();
+    }
+    return total;
 }
 
 CellCoord SpatialHash3D::cell_for(Vector3 position) const noexcept

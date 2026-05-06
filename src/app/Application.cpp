@@ -256,8 +256,35 @@ void Application::refresh_overlay_text(float frame_time_ms)
     write_line(
         overlay_lines_[line++],
         "Cells %-6zu   Queries %llu",
-        metrics_.spatial_hash_cell_count,
+        metrics_.spatial_cell_count,
         static_cast<unsigned long long>(metrics_.neighbor_queries));
+    write_line(
+        overlay_lines_[line++],
+        "Candidates/query avg %.1f max %zu",
+        metrics_.avg_candidates_per_query,
+        metrics_.max_candidates_per_query);
+    write_line(
+        overlay_lines_[line++],
+        "Neighbors/query  avg %.1f max %zu",
+        metrics_.avg_effective_neighbors_per_query,
+        metrics_.max_effective_neighbors_per_query);
+    write_line(
+        overlay_lines_[line++],
+        "Occupancy cells %zu avg %.1f max %zu",
+        metrics_.spatial_cell_count,
+        metrics_.avg_cell_occupancy,
+        metrics_.max_cell_occupancy);
+    const char* warning = "ok";
+    if (metrics_.avg_candidates_per_query > 128.0) {
+        warning = "high candidates/query";
+    } else if (metrics_.max_cell_occupancy > 64) {
+        warning = "high max cell occupancy";
+    } else if (metrics_.render_ms > metrics_.simulation_update_ms) {
+        warning = "render bottleneck";
+    } else if (metrics_.simulation_update_ms > metrics_.render_ms) {
+        warning = "simulation bottleneck";
+    }
+    write_line(overlay_lines_[line++], "Warning %s", warning);
     write_line(overlay_lines_[line++], "Camera speed %.1f (mouse wheel)", static_cast<double>(camera_controller_.move_speed()));
     write_literal(overlay_lines_[line++], "");
     write_literal(overlay_lines_[line++], "Collective behavior");
