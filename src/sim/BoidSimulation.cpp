@@ -1,9 +1,9 @@
-#include "sim/BoidSimulation.hpp"
+#include <flock3d/sim/BoidSimulation.hpp>
 
 #include <algorithm>
 #include <random>
 
-#include "math/Vec3.hpp"
+#include <flock3d/math/Vec3.hpp>
 
 namespace flock3d::sim {
 namespace {

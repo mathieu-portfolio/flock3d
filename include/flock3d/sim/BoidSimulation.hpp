@@ -6,8 +6,8 @@
 
 #include <raylib.h>
 
-#include "sim/SimulationParameters.hpp"
-#include "sim/SpatialHash3D.hpp"
+#include <flock3d/sim/SimulationParameters.hpp>
+#include <flock3d/sim/SpatialHash3D.hpp>
 
 namespace flock3d::sim {
 

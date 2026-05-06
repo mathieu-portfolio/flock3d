@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <raylib.h>
 
-#include "sim/BoidSimulation.hpp"
-#include "sim/SimulationParameters.hpp"
+#include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/SimulationParameters.hpp>
 
 TEST_CASE("BoidSimulation wraps positions at world bounds", "[simulation]")
 {

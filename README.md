@@ -5,7 +5,7 @@
 ## Features
 
 - **Modern C++20** with small, focused translation units.
-- **CMake + FetchContent** for cross-platform dependency management.
+- **Modular CMake + FetchContent** for cross-platform dependency management.
 - **raylib** rendering with a free 3D camera and FPS counter.
 - **Catch2** tests for spatial hashing, wrapping, and fixed-timestep behavior.
 - **Deterministic fixed timestep** simulation loop at 120 Hz.
@@ -61,12 +61,20 @@ On Windows, the executable is typically located at:
 ## Architecture overview
 
 ```text
+include/flock3d/
+  sim/      Public simulation headers for flock3d::core consumers.
+  math/     Public lightweight Vector3 helpers used by simulation code.
 src/
   app/      Window ownership, camera setup, and the fixed-timestep main loop.
-  sim/      Deterministic boid data, world wrapping, and spatial hashing.
-  render/   raylib rendering for boids and world bounds.
-  math/     Lightweight Vector3 helpers used by simulation code.
-tests/      Catch2 coverage for core simulation behavior.
+  sim/      Core simulation implementation and CMake target definition.
+  render/   raylib rendering implementation and CMake target definition.
+tests/      Catch2 coverage and test target definition.
+```
+
+CMake target ownership is intentionally local to each subdirectory: the root `CMakeLists.txt` configures the project, shared modules, and dependency fetching, while `src/sim`, `src/render`, `src/app`, and `tests` each declare the targets they own. Public core headers live under `include/flock3d` so external consumers can include stable paths such as:
+
+```cpp
+#include <flock3d/sim/BoidSimulation.hpp>
 ```
 
 The simulation owns the boid data in a structure-of-arrays layout:

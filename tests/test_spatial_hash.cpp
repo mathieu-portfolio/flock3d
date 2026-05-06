@@ -5,7 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <raylib.h>
 
-#include "sim/SpatialHash3D.hpp"
+#include <flock3d/sim/SpatialHash3D.hpp>
 
 namespace {
 

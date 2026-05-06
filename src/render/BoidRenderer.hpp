@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sim/BoidSimulation.hpp"
+#include <flock3d/sim/BoidSimulation.hpp>
 
 namespace flock3d::render {
 

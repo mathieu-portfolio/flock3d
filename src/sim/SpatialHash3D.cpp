@@ -1,9 +1,9 @@
-#include "sim/SpatialHash3D.hpp"
+#include <flock3d/sim/SpatialHash3D.hpp>
 
 #include <cmath>
 #include <stdexcept>
 
-#include "math/Vec3.hpp"
+#include <flock3d/math/Vec3.hpp>
 
 namespace flock3d::sim {
 namespace {
