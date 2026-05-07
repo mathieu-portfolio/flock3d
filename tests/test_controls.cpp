@@ -28,6 +28,23 @@ TEST_CASE("Tunable parameter adjustment applies step and clamps", "[controls]")
     CHECK(parameters.neighbor_radius == 0.5F);
 }
 
+TEST_CASE("Radius tuning keeps spatial cells aligned with query radius", "[controls]")
+{
+    flock3d::sim::SimulationParameters parameters{};
+    parameters.neighbor_radius = 4.0F;
+    parameters.separation_radius = 2.0F;
+    parameters.spatial_cell_size = 4.0F;
+
+    flock3d::app::adjust_parameter(parameters, flock3d::app::TunableParameter::perception_radius, 1);
+    CHECK(parameters.neighbor_radius == 4.25F);
+    CHECK(parameters.spatial_cell_size == 4.25F);
+
+    parameters.separation_radius = 4.5F;
+    flock3d::app::adjust_parameter(parameters, flock3d::app::TunableParameter::separation_radius, 1);
+    CHECK(parameters.separation_radius == 4.75F);
+    CHECK(parameters.spatial_cell_size == 4.75F);
+}
+
 TEST_CASE("Tunable parameter index maps number keys to selected parameter", "[controls]")
 {
     CHECK(flock3d::app::parameter_from_index(0) == flock3d::app::TunableParameter::separation_weight);

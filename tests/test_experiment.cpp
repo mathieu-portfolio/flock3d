@@ -113,6 +113,19 @@ TEST_CASE("Sweep parser expands inclusive numeric ranges", "[experiment][sweep]"
 }
 
 
+TEST_CASE("Experiment radius sweeps keep spatial cells aligned with query radius", "[experiment][sweep]")
+{
+    flock3d::sim::SimulationParameters parameters{};
+
+    CHECK(flock3d::experiment::apply_sweep_value(parameters, "neighbor_radius", 6.0));
+    CHECK(parameters.neighbor_radius == Catch::Approx(6.0F));
+    CHECK(parameters.spatial_cell_size == Catch::Approx(6.0F));
+
+    CHECK(flock3d::experiment::apply_sweep_value(parameters, "separation_radius", 8.0));
+    CHECK(parameters.separation_radius == Catch::Approx(8.0F));
+    CHECK(parameters.spatial_cell_size == Catch::Approx(8.0F));
+}
+
 TEST_CASE("Experiment sweeps BirdFlight constraint parameters", "[experiment][sweep][birdflight]")
 {
     flock3d::sim::SimulationParameters parameters{};

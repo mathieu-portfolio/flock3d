@@ -111,6 +111,7 @@ void sync_plain_settings_to_parameters(ScenarioDefinition& definition) noexcept
     definition.simulation_parameters.cohesion_weight = definition.behavior.cohesion_weight;
     definition.simulation_parameters.neighbor_radius = definition.behavior.neighbor_radius;
     definition.simulation_parameters.separation_radius = definition.behavior.separation_radius;
+    sync_spatial_cell_size_to_query_radius(definition.simulation_parameters);
 }
 
 } // namespace

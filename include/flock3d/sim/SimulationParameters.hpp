@@ -37,6 +37,16 @@ struct SimulationParameters {
     float field_of_view_degrees{360.0F};
 };
 
+[[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept
+{
+    return std::max(parameters.neighbor_radius, parameters.separation_radius);
+}
+
+constexpr void sync_spatial_cell_size_to_query_radius(SimulationParameters& parameters) noexcept
+{
+    parameters.spatial_cell_size = effective_query_radius(parameters);
+}
+
 class FixedTimestepAccumulator {
 public:
     explicit constexpr FixedTimestepAccumulator(double fixed_dt = 1.0 / 120.0) noexcept

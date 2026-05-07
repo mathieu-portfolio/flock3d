@@ -96,6 +96,9 @@ inline void adjust_parameter(sim::SimulationParameters& parameters, TunableParam
     const auto& descriptor = descriptor_for(parameter);
     auto& value = parameters.*(descriptor.value);
     value = std::clamp(value + static_cast<float>(direction) * descriptor.step, descriptor.minimum, descriptor.maximum);
+    if (parameter == TunableParameter::perception_radius || parameter == TunableParameter::separation_radius) {
+        sim::sync_spatial_cell_size_to_query_radius(parameters);
+    }
 }
 
 } // namespace flock3d::app

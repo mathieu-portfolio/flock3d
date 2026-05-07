@@ -120,7 +120,7 @@ TEST_CASE("BoidSimulation records neighbor metrics", "[simulation]")
     CHECK(metrics.max_cell_occupancy == 2);
 }
 
-TEST_CASE("BoidSimulation counts candidates from visited hash cells", "[simulation][metrics]")
+TEST_CASE("BoidSimulation synchronizes spatial cells before measuring hash candidates", "[simulation][metrics]")
 {
     auto parameters = steering_test_parameters();
     parameters.neighbor_radius = 1.0F;
@@ -135,16 +135,34 @@ TEST_CASE("BoidSimulation counts candidates from visited hash cells", "[simulati
     flock3d::sim::SimulationMetrics metrics{};
     simulation.update(0.0F, &metrics);
 
+    CHECK(simulation.parameters().spatial_cell_size == Catch::Approx(1.0F));
     CHECK(metrics.neighbor_queries == 3);
-    CHECK(metrics.neighbor_candidates == 9);
+    CHECK(metrics.neighbor_candidates == 5);
     CHECK(metrics.neighbor_total == 2);
-    CHECK(metrics.avg_candidates_per_query == Catch::Approx(3.0));
-    CHECK(metrics.max_candidates_per_query == 3);
+    CHECK(metrics.avg_candidates_per_query == Catch::Approx(5.0 / 3.0));
+    CHECK(metrics.max_candidates_per_query == 2);
     CHECK(metrics.avg_effective_neighbors_per_query == Catch::Approx(2.0 / 3.0));
     CHECK(metrics.max_effective_neighbors_per_query == 1);
-    CHECK(metrics.spatial_cell_count == 1);
-    CHECK(metrics.avg_cell_occupancy == Catch::Approx(3.0));
-    CHECK(metrics.max_cell_occupancy == 3);
+    CHECK(metrics.spatial_cell_count == 3);
+    CHECK(metrics.avg_cell_occupancy == Catch::Approx(1.0));
+    CHECK(metrics.max_cell_occupancy == 1);
+}
+
+TEST_CASE("BoidSimulation repairs direct radius edits before update", "[simulation][parameters]")
+{
+    flock3d::sim::SimulationParameters parameters{};
+    parameters.boid_count = 0;
+    parameters.neighbor_radius = 4.0F;
+    parameters.separation_radius = 2.0F;
+    parameters.spatial_cell_size = 4.0F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.parameters().neighbor_radius = 5.0F;
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(simulation.parameters().spatial_cell_size == Catch::Approx(5.0F));
 }
 
 TEST_CASE("FixedTimestepAccumulator consumes deterministic 120 Hz steps", "[time]")
@@ -255,7 +273,18 @@ TEST_CASE("Scenario factory returns valid definitions for every scenario type", 
         CHECK(definition.environment.world_half_extent > 0.0F);
         CHECK(definition.constraints.max_speed > 0.0F);
         CHECK(definition.behavior.neighbor_radius > 0.0F);
+        CHECK(definition.simulation_parameters.spatial_cell_size
+            == Catch::Approx(flock3d::sim::effective_query_radius(definition.simulation_parameters)));
     }
+}
+
+TEST_CASE("NoiseExperiment keeps spatial cells aligned with perception radius", "[scenario][noise]")
+{
+    const auto definition = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::NoiseExperiment);
+    const auto& parameters = definition.simulation_parameters;
+
+    CHECK(parameters.neighbor_radius == Catch::Approx(5.0F));
+    CHECK(parameters.spatial_cell_size == Catch::Approx(parameters.neighbor_radius));
 }
 
 TEST_CASE("BirdFlight enforces minimum speed", "[simulation][birdflight]")
