@@ -35,6 +35,8 @@ struct SimulationMetrics {
     std::size_t near_ground_count{};
     std::size_t cluster_count{};
     std::size_t spatial_hash_cell_count{};
+    float noise_strength{};
+    float order_loss{};
 
     double nearest_neighbor_distance_total{};
     std::uint64_t nearest_neighbor_distance_count{};
@@ -67,6 +69,8 @@ struct SimulationMetrics {
         near_ground_count = 0;
         cluster_count = 0;
         spatial_hash_cell_count = 0;
+        noise_strength = 0.0F;
+        order_loss = 0.0F;
         nearest_neighbor_distance_total = 0.0;
         nearest_neighbor_distance_count = 0;
     }
@@ -147,6 +151,7 @@ struct SimulationMetrics {
             ? static_cast<float>(nearest_neighbor_distance_total / static_cast<double>(nearest_neighbor_distance_count))
             : 0.0F;
         cluster_count = 0; // TODO: implement cluster detection once scenario-specific connectivity is available.
+        order_loss = 1.0F - polarization;
     }
 };
 

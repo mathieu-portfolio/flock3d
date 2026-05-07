@@ -11,7 +11,7 @@
 namespace flock3d::experiment {
 namespace {
 
-constexpr std::string_view csv_header = "scenario,seed,timestamp,git_commit,export_mode,sample_rate_hz,sample_index,simulation_time,boid_count,polarization,cohesion,dispersion,average_speed,average_neighbors,nearest_neighbor_distance,simulation_update_ms,neighbor_queries,spatial_cell_count,mean_depth,depth_variance,mean_altitude,altitude_variance,stall_count,near_ground_count,sweep_parameter,sweep_value";
+constexpr std::string_view csv_header = "scenario,seed,timestamp,git_commit,export_mode,sample_rate_hz,sample_index,simulation_time,boid_count,polarization,cohesion,dispersion,average_speed,average_neighbors,nearest_neighbor_distance,simulation_update_ms,neighbor_queries,spatial_cell_count,mean_depth,depth_variance,mean_altitude,altitude_variance,stall_count,near_ground_count,noise_strength,order_loss,sweep_parameter,sweep_value";
 
 [[nodiscard]] double valid_sample_rate(double sample_rate_hz) noexcept
 {
@@ -87,6 +87,8 @@ void SummaryAggregator::add_sample(const sim::SimulationMetrics& metrics) noexce
     altitude_variance_total_ += metrics.altitude_variance;
     stall_count_total_ += static_cast<double>(metrics.stall_count);
     near_ground_count_total_ += static_cast<double>(metrics.near_ground_count);
+    noise_strength_total_ += metrics.noise_strength;
+    order_loss_total_ += metrics.order_loss;
 }
 
 SummaryStatistics SummaryAggregator::statistics(double total_duration_seconds) const noexcept
@@ -112,6 +114,8 @@ SummaryStatistics SummaryAggregator::statistics(double total_duration_seconds) c
     summary.mean_altitude_variance = altitude_variance_total_ / denominator;
     summary.mean_stall_count = stall_count_total_ / denominator;
     summary.mean_near_ground_count = near_ground_count_total_ / denominator;
+    summary.mean_noise_strength = noise_strength_total_ / denominator;
+    summary.mean_order_loss = order_loss_total_ / denominator;
     return summary;
 }
 
@@ -131,6 +135,8 @@ sim::SimulationMetrics SummaryAggregator::aggregate(double total_duration_second
     metrics.altitude_variance = static_cast<float>(summary.mean_altitude_variance);
     metrics.stall_count = static_cast<std::size_t>(summary.mean_stall_count);
     metrics.near_ground_count = static_cast<std::size_t>(summary.mean_near_ground_count);
+    metrics.noise_strength = static_cast<float>(summary.mean_noise_strength);
+    metrics.order_loss = static_cast<float>(summary.mean_order_loss);
     metrics.simulation_update_ms = summary.total_duration_seconds;
     metrics.neighbor_queries = static_cast<std::uint64_t>(summary.sample_count);
     metrics.neighbor_candidates = static_cast<std::uint64_t>(summary.max_polarization * 1'000'000.0);
@@ -183,7 +189,8 @@ void CsvMetricsWriter::write_sample(const SampleMetadata& metadata, const sim::S
             << metrics.nearest_neighbor_average_distance << ',' << metrics.simulation_update_ms << ','
             << metrics.neighbor_queries << ',' << metrics.spatial_hash_cell_count << ',' << metrics.mean_depth << ','
             << metrics.depth_variance << ',' << metrics.mean_altitude << ',' << metrics.altitude_variance << ','
-            << metrics.stall_count << ',' << metrics.near_ground_count << ',';
+            << metrics.stall_count << ',' << metrics.near_ground_count << ',' << metrics.noise_strength << ','
+            << metrics.order_loss << ',';
     write_csv_value(stream_, metadata.sweep_parameter);
     stream_ << ',';
     write_csv_value(stream_, metadata.sweep_value);

@@ -12,8 +12,8 @@ CSV files are written under `outputs/` by the interactive app using timestamped 
 
 Supported export modes:
 
-- **SampledTimeSeries** (default): writes one row per sample containing scenario, seed, timestamp, git commit when available, sample rate, sample index, simulation time, boid count, polarization, cohesion, dispersion, average speed, average neighbors, nearest-neighbor distance, simulation update time, neighbor queries, spatial hash cell count, mean altitude, altitude variance, stall count, near-ground count, and optional sweep metadata.
-- **Summary**: samples at the same independent cadence but writes one aggregate row at the end of recording or at the end of a headless run. The aggregate records mean polarization, mean cohesion, max dispersion, mean speed, mean neighbors, mean flight metrics, and total duration in the shared CSV schema; `SummaryAggregator` also retains max polarization for code-level consumers.
+- **SampledTimeSeries** (default): writes one row per sample containing scenario, seed, timestamp, git commit when available, sample rate, sample index, simulation time, boid count, polarization, cohesion, dispersion, average speed, average neighbors, nearest-neighbor distance, simulation update time, neighbor queries, spatial hash cell count, mean altitude, altitude variance, stall count, near-ground count, noise strength, order loss, and optional sweep metadata.
+- **Summary**: samples at the same independent cadence but writes one aggregate row at the end of recording or at the end of a headless run. The aggregate records mean polarization, mean cohesion, max dispersion, mean speed, mean neighbors, mean flight/noise metrics, and total duration in the shared CSV schema; `SummaryAggregator` also retains max polarization for code-level consumers.
 - **FullTrajectory**: declared as a placeholder for future full state export and intentionally not implemented yet.
 
 ## BirdFlight stability metrics
@@ -86,7 +86,7 @@ One-parameter sweeps use inclusive `start:end:step` ranges. Only one `--sweep` a
   --output outputs/alignment_weight_sweep.csv
 ```
 
-BirdFlight sweeps support at least `gravity`, `lift_strength`, `max_turn_rate`, `field_of_view_degrees`, and `altitude_correction_strength`.
+BirdFlight sweeps support at least `gravity`, `lift_strength`, `max_turn_rate`, `field_of_view_degrees`, and `altitude_correction_strength`. NoiseExperiment sweeps support `perception_noise_strength` and `steering_noise_strength`, with `velocity_noise_strength`, `noise_seed_offset`, and `noise_enabled` available for targeted overrides.
 
 ## BirdFlight presets
 
@@ -141,6 +141,33 @@ Override run size and seed while keeping the narrow-FOV preset parameters:
   --output outputs/bird_narrow_fov_seed2401.csv
 ```
 
+## NoiseExperiment order robustness
+
+NoiseExperiment studies how noisy local information and actuator response degrade collective order. It reuses the shared ClassicBoids separation/alignment/cohesion update, then applies deterministic perturbations controlled by the simulation seed and `noise_seed_offset`:
+
+- `perception_noise_strength` perturbs perceived neighbor offsets and alignment directions before the flocking sums are evaluated.
+- `steering_noise_strength` perturbs each boid's final steering acceleration before force clamping.
+- `velocity_noise_strength` optionally perturbs velocity after integration, followed by the usual speed clamp.
+- `noise_enabled` can disable the perturbation path; with all strengths at zero, matched ClassicBoids parameters produce the same trajectory.
+
+The core macroscopic metrics remain the main observables: `polarization`, `dispersion`, `cohesion`, and `average_neighbors`. CSV exports also include `noise_strength` and `order_loss`, where `order_loss = 1 - polarization`, so summary sweeps can directly compare noise strength vs. polarization.
+
+Presets are `noise_baseline`, `noise_low`, `noise_medium`, and `noise_high`. A suggested experiment is a one-parameter summary sweep of noise strength against polarization:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --preset noise_baseline \
+  --seed 7901 \
+  --boids 1024 \
+  --duration 45 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode summary \
+  --sweep steering_noise_strength=0:0.5:0.05 \
+  --output outputs/noise_steering_vs_polarization.csv
+```
+
+Repeat the same command with `--sweep perception_noise_strength=0:0.5:0.05` to compare perception noise against steering noise while keeping the initial seed and timestep fixed.
 
 ## FishSchool experiments
 

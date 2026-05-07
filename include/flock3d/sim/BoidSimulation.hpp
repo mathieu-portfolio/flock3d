@@ -36,12 +36,14 @@ private:
         bool apply_bird_velocity_constraints{false};
         bool add_fish_medium_acceleration{false};
         bool apply_fish_velocity_constraints{false};
+        bool apply_noise{false};
     };
 
     void update_model(float dt, SimulationMetrics* metrics);
     void update_classic_boids(float dt, SimulationMetrics* metrics);
     void update_bird_flight(float dt, SimulationMetrics* metrics);
     void update_fish_school(float dt, SimulationMetrics* metrics);
+    void update_noise_experiment(float dt, SimulationMetrics* metrics);
     void update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior);
     void spawn_random(std::uint32_t boid_count);
     void wrap_position(Vector3& position) const noexcept;
@@ -52,6 +54,8 @@ private:
     [[nodiscard]] Vector3 enforce_min_speed(Vector3 velocity) const noexcept;
     [[nodiscard]] Vector3 limit_turn_rate(Vector3 previous_velocity, Vector3 desired_velocity, float dt) const noexcept;
     [[nodiscard]] Vector3 seek(Vector3 position, Vector3 velocity, Vector3 target) const noexcept;
+    [[nodiscard]] Vector3 deterministic_noise_vector(std::size_t boid_index, std::uint32_t channel, std::uint64_t step) const;
+    [[nodiscard]] float combined_noise_strength() const noexcept;
     void record_collective_metrics(SimulationMetrics& metrics) const noexcept;
 
     SimulationParameters parameters_;
@@ -60,6 +64,7 @@ private:
     std::vector<Vector3> velocities_;
     std::vector<Vector3> accelerations_;
     std::vector<std::size_t> neighbor_indices_;
+    std::uint64_t noise_step_{};
 };
 
 } // namespace flock3d::sim

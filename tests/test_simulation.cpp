@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 #include <numbers>
 
@@ -28,6 +29,26 @@ namespace {
     parameters.max_force = 10.0F;
     parameters.spatial_cell_size = 4.0F;
     return parameters;
+}
+
+
+[[nodiscard]] double trajectory_distance(const flock3d::sim::BoidSimulation& lhs, const flock3d::sim::BoidSimulation& rhs)
+{
+    double total = 0.0;
+    for (std::size_t i = 0; i < lhs.positions().size(); ++i) {
+        const auto position_delta = flock3d::math::subtract(lhs.positions()[i], rhs.positions()[i]);
+        const auto velocity_delta = flock3d::math::subtract(lhs.velocities()[i], rhs.velocities()[i]);
+        total += flock3d::math::length(position_delta);
+        total += flock3d::math::length(velocity_delta);
+    }
+    return total;
+}
+
+void run_steps(flock3d::sim::BoidSimulation& simulation, int steps, flock3d::sim::SimulationMetrics& metrics)
+{
+    for (int step = 0; step < steps; ++step) {
+        simulation.update(1.0F / 120.0F, &metrics);
+    }
 }
 
 } // namespace
@@ -285,6 +306,102 @@ TEST_CASE("NoiseExperiment keeps spatial cells aligned with perception radius", 
 
     CHECK(parameters.neighbor_radius == Catch::Approx(5.0F));
     CHECK(parameters.spatial_cell_size == Catch::Approx(parameters.neighbor_radius));
+}
+
+TEST_CASE("NoiseExperiment zero noise matches ClassicBoids trajectory", "[simulation][noise]")
+{
+    auto classic = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::ClassicBoids).simulation_parameters;
+    classic.boid_count = 48U;
+    classic.random_seed = 2024U;
+    classic.neighbor_radius = 5.0F;
+    flock3d::sim::sync_spatial_cell_size_to_query_radius(classic);
+
+    auto noise = classic;
+    noise.model = flock3d::sim::SimulationModel::NoiseExperiment;
+    noise.noise_enabled = true;
+    noise.perception_noise_strength = 0.0F;
+    noise.steering_noise_strength = 0.0F;
+    noise.velocity_noise_strength = 0.0F;
+
+    flock3d::sim::BoidSimulation classic_sim{classic};
+    flock3d::sim::BoidSimulation noise_sim{noise};
+    flock3d::sim::SimulationMetrics classic_metrics{};
+    flock3d::sim::SimulationMetrics noise_metrics{};
+    run_steps(classic_sim, 24, classic_metrics);
+    run_steps(noise_sim, 24, noise_metrics);
+
+    CHECK(trajectory_distance(classic_sim, noise_sim) == Catch::Approx(0.0).margin(0.000001));
+    CHECK(noise_metrics.noise_strength == Catch::Approx(0.0F));
+    CHECK(noise_metrics.order_loss == Catch::Approx(1.0F - noise_metrics.polarization));
+}
+
+TEST_CASE("NoiseExperiment noisy behavior is deterministic for the same seed", "[simulation][noise][seed]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::NoiseExperiment).simulation_parameters;
+    parameters.boid_count = 48U;
+    parameters.random_seed = 3030U;
+    parameters.perception_noise_strength = 0.2F;
+    parameters.steering_noise_strength = 0.25F;
+    parameters.velocity_noise_strength = 0.05F;
+
+    flock3d::sim::BoidSimulation first{parameters};
+    flock3d::sim::BoidSimulation second{parameters};
+    flock3d::sim::SimulationMetrics first_metrics{};
+    flock3d::sim::SimulationMetrics second_metrics{};
+    run_steps(first, 30, first_metrics);
+    run_steps(second, 30, second_metrics);
+
+    CHECK(trajectory_distance(first, second) == Catch::Approx(0.0).margin(0.000001));
+    CHECK(first_metrics.polarization == second_metrics.polarization);
+}
+
+TEST_CASE("NoiseExperiment strength changes trajectory", "[simulation][noise]")
+{
+    auto low = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::NoiseExperiment).simulation_parameters;
+    low.boid_count = 48U;
+    low.random_seed = 4040U;
+    low.perception_noise_strength = 0.02F;
+    low.steering_noise_strength = 0.02F;
+
+    auto high = low;
+    high.perception_noise_strength = 0.35F;
+    high.steering_noise_strength = 0.35F;
+    high.velocity_noise_strength = 0.08F;
+
+    flock3d::sim::BoidSimulation low_sim{low};
+    flock3d::sim::BoidSimulation high_sim{high};
+    flock3d::sim::SimulationMetrics low_metrics{};
+    flock3d::sim::SimulationMetrics high_metrics{};
+    run_steps(low_sim, 30, low_metrics);
+    run_steps(high_sim, 30, high_metrics);
+
+    CHECK(trajectory_distance(low_sim, high_sim) > 0.01);
+    CHECK(high_metrics.noise_strength > low_metrics.noise_strength);
+}
+
+TEST_CASE("NoiseExperiment high noise lowers short-run polarization", "[simulation][noise][metrics]")
+{
+    auto baseline = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::NoiseExperiment).simulation_parameters;
+    baseline.boid_count = 96U;
+    baseline.random_seed = 5050U;
+    baseline.perception_noise_strength = 0.0F;
+    baseline.steering_noise_strength = 0.0F;
+    baseline.velocity_noise_strength = 0.0F;
+
+    auto high = baseline;
+    high.perception_noise_strength = 0.5F;
+    high.steering_noise_strength = 0.5F;
+    high.velocity_noise_strength = 0.2F;
+
+    flock3d::sim::BoidSimulation baseline_sim{baseline};
+    flock3d::sim::BoidSimulation high_sim{high};
+    flock3d::sim::SimulationMetrics baseline_metrics{};
+    flock3d::sim::SimulationMetrics high_metrics{};
+    run_steps(baseline_sim, 120, baseline_metrics);
+    run_steps(high_sim, 120, high_metrics);
+
+    CHECK(high_metrics.polarization < baseline_metrics.polarization);
+    CHECK(high_metrics.order_loss > baseline_metrics.order_loss);
 }
 
 TEST_CASE("ClassicBoids dispatch updates shared flocking", "[simulation][dispatch]")

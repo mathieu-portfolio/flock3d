@@ -13,6 +13,7 @@ enum class SimulationModel : std::uint8_t {
     ClassicBoids = 0,
     BirdFlight,
     FishSchool,
+    NoiseExperiment,
 };
 
 struct SimulationParameters {
@@ -47,6 +48,11 @@ struct SimulationParameters {
     float depth_correction_strength{0.0F};
     float current_strength{0.0F};
     Vector3 current_direction{1.0F, 0.0F, 0.0F};
+    float perception_noise_strength{0.0F};
+    float steering_noise_strength{0.0F};
+    float velocity_noise_strength{0.0F};
+    std::uint32_t noise_seed_offset{10'000U};
+    bool noise_enabled{false};
 };
 
 [[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept
