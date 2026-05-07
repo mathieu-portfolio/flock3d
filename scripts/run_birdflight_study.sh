@@ -11,7 +11,7 @@ runner="$(study_runner_path)"
 out_dir="outputs/birdflight"
 mkdir -p "${out_dir}"
 
-csv="${out_dir}/birdflight_gravity_sweep.csv"
+fov_csv="${out_dir}/birdflight_fov_sweep.csv"
 "${runner}" \
     --preset bird_baseline \
     --seed 2401 \
@@ -20,12 +20,29 @@ csv="${out_dir}/birdflight_gravity_sweep.csv"
     --fixed-dt 0.008333333333333333 \
     --sample-rate 5 \
     --export-mode summary \
-    --sweep gravity=6:14:2 \
-    --output "${csv}"
+    --sweep field_of_view_degrees=90:270:45 \
+    --output "${fov_csv}"
 
-study_plot_sweep_metric "${csv}" mean_altitude "${out_dir}/gravity_vs_mean_altitude.png"
-study_plot_sweep_metric "${csv}" altitude_variance "${out_dir}/gravity_vs_altitude_variance.png"
-study_plot_sweep_metric "${csv}" stall_count "${out_dir}/gravity_vs_stall_count.png"
-study_plot_sweep_metric "${csv}" near_ground_count "${out_dir}/gravity_vs_near_ground_count.png"
+study_plot_sweep_metric "${fov_csv}" polarization "${out_dir}/fov_vs_polarization.png"
+study_plot_sweep_metric "${fov_csv}" dispersion "${out_dir}/fov_vs_dispersion.png"
+study_plot_sweep_metric "${fov_csv}" average_neighbors "${out_dir}/fov_vs_average_neighbors.png"
+study_plot_sweep_metric "${fov_csv}" stall_count "${out_dir}/fov_vs_stall_count.png"
 
-printf 'BirdFlight study complete:\n  CSV:   %s\n  Plots: %s\n' "${csv}" "${out_dir}"
+turn_rate_csv="${out_dir}/birdflight_turn_rate_sweep.csv"
+"${runner}" \
+    --preset bird_baseline \
+    --seed 2401 \
+    --boids 512 \
+    --duration 20 \
+    --fixed-dt 0.008333333333333333 \
+    --sample-rate 5 \
+    --export-mode summary \
+    --sweep max_turn_rate=30:150:30 \
+    --output "${turn_rate_csv}"
+
+study_plot_sweep_metric "${turn_rate_csv}" polarization "${out_dir}/turn_rate_vs_polarization.png"
+study_plot_sweep_metric "${turn_rate_csv}" dispersion "${out_dir}/turn_rate_vs_dispersion.png"
+study_plot_sweep_metric "${turn_rate_csv}" cohesion "${out_dir}/turn_rate_vs_cohesion.png"
+study_plot_sweep_metric "${turn_rate_csv}" altitude_variance "${out_dir}/turn_rate_vs_altitude_variance.png"
+
+printf 'BirdFlight study complete:\n  CSVs:  %s\n         %s\n  Plots: %s\n' "${fov_csv}" "${turn_rate_csv}" "${out_dir}"

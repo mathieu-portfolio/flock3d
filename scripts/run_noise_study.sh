@@ -26,5 +26,6 @@ csv="${out_dir}/noise_steering_sweep.csv"
 study_plot_sweep_metric "${csv}" polarization "${out_dir}/noise_strength_vs_polarization.png"
 study_plot_sweep_metric "${csv}" order_loss "${out_dir}/noise_strength_vs_order_loss.png"
 study_plot_sweep_metric "${csv}" dispersion "${out_dir}/noise_strength_vs_dispersion.png"
+study_plot_sweep_metric "${csv}" cohesion "${out_dir}/noise_strength_vs_cohesion.png"
 
 printf 'Noise study complete:\n  CSV:   %s\n  Plots: %s\n' "${csv}" "${out_dir}"
