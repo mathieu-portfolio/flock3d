@@ -73,12 +73,18 @@ def main() -> int:
         if grouped.empty:
             raise ValueError(f"No sweep groups found in {csv_path}.")
 
+        x_label = args.sweep_column
+        if "sweep_parameter" in data.columns:
+            sweep_parameters = data["sweep_parameter"].dropna().astype(str).unique()
+            if len(sweep_parameters) == 1 and sweep_parameters[0]:
+                x_label = sweep_parameters[0]
+
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig, ax = plt.subplots(figsize=(8, 4.5))
         ax.plot(grouped[args.sweep_column], grouped[args.metric], marker="o", linewidth=1.5)
-        ax.set_xlabel(args.sweep_column)
+        ax.set_xlabel(x_label)
         ax.set_ylabel(f"mean {args.metric}")
-        ax.set_title(f"Mean {args.metric} by {args.sweep_column}")
+        ax.set_title(f"Mean {args.metric} by {x_label}")
         ax.grid(True, alpha=0.3)
         fig.tight_layout()
         fig.savefig(output_path, dpi=150)

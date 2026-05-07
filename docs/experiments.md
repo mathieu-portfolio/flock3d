@@ -127,6 +127,46 @@ python3 scripts/compare_sweeps.py \
 
 Both scripts check that requested columns exist and exit with an error listing the available columns when a CSV schema or CLI argument does not match.
 
+## Generate example studies
+
+The `scripts/run_*_study.sh` recipe scripts turn the runner and plotting tools into one-command, reproducible result generation for documentation and portfolio artifacts. Each script:
+
+1. Changes to the repository root so relative paths are stable.
+2. Checks that `pandas` and `matplotlib` are importable and prints the install command if they are missing.
+3. Configures and builds the `flock3d_experiment_runner` target using `${CMAKE_PRESET:-debug}`.
+4. Runs a deterministic summary-mode sweep with fixed seed, boid count, timestep, duration, and sample rate.
+5. Writes a CSV in `outputs/` and a PNG in `outputs/plots/`.
+
+Install plotting dependencies once if needed:
+
+```bash
+python3 -m pip install pandas matplotlib
+```
+
+Run the curated studies from the repository root:
+
+```bash
+./scripts/run_noise_study.sh
+./scripts/run_birdflight_study.sh
+./scripts/run_fishschool_study.sh
+```
+
+Use another CMake preset by setting `CMAKE_PRESET`, for example:
+
+```bash
+CMAKE_PRESET=release ./scripts/run_fishschool_study.sh
+```
+
+Expected outputs and interpretation:
+
+| Study | Deterministic sweep | CSV output | Plot output | How to read it |
+| --- | --- | --- | --- | --- |
+| Noise | `steering_noise_strength=0:0.4:0.1` with `noise_baseline` | `outputs/noise_steering_sweep.csv` | `outputs/plots/noise_strength_vs_polarization.png` | Polarization is the collective-order metric; a downward trend means injected steering perturbations are disrupting alignment. |
+| BirdFlight | `gravity=6:14:2` with `bird_baseline` | `outputs/birdflight_gravity_sweep.csv` | `outputs/plots/gravity_vs_mean_altitude.png` | Mean altitude summarizes flight stability; falling altitude at high gravity shows when lift and altitude correction can no longer maintain the target band. |
+| FishSchool | `drag_coefficient=0:1:0.25` with `fish_baseline` | `outputs/fishschool_drag_sweep.csv` | `outputs/plots/drag_vs_polarization.png` | Polarization shows school alignment; drag changes the damping regime and can either smooth or suppress coordinated motion depending on magnitude. |
+
+The scripts intentionally use `--export-mode summary` so each sweep value contributes one averaged row, which keeps artifacts small and makes `scripts/compare_sweeps.py` the only plotting step required.
+
 ## Suggested analysis workflow
 
 1. Choose a scenario question from [scenarios.md](scenarios.md).
