@@ -287,6 +287,61 @@ TEST_CASE("NoiseExperiment keeps spatial cells aligned with perception radius", 
     CHECK(parameters.spatial_cell_size == Catch::Approx(parameters.neighbor_radius));
 }
 
+TEST_CASE("ClassicBoids dispatch updates shared flocking", "[simulation][dispatch]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.model = flock3d::sim::SimulationModel::ClassicBoids;
+    parameters.cohesion_weight = 1.0F;
+    parameters.separation_radius = 0.25F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{4.0F, 0.0F, 0.0F}, Vector3{});
+
+    simulation.update(1.0F);
+
+    REQUIRE(simulation.velocities().size() == 2);
+    CHECK(simulation.velocities()[0].x > 0.0F);
+    CHECK(simulation.velocities()[1].x < 0.0F);
+}
+
+TEST_CASE("FishSchool dispatch currently reuses classic flocking", "[simulation][dispatch][fishschool]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::FishSchool).simulation_parameters;
+    parameters.boid_count = 0;
+
+    CHECK(parameters.model == flock3d::sim::SimulationModel::FishSchool);
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{});
+    const auto before_count = simulation.size();
+
+    simulation.update(1.0F);
+
+    CHECK(simulation.size() == before_count);
+    CHECK(simulation.positions().size() == before_count);
+    CHECK(simulation.velocities().size() == before_count);
+}
+
+TEST_CASE("Unknown SimulationModel falls back to classic flocking", "[simulation][dispatch]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.model = static_cast<flock3d::sim::SimulationModel>(255U);
+    parameters.cohesion_weight = 1.0F;
+    parameters.separation_radius = 0.25F;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{4.0F, 0.0F, 0.0F}, Vector3{});
+
+    simulation.update(1.0F);
+
+    REQUIRE(simulation.velocities().size() == 2);
+    CHECK(simulation.velocities()[0].x > 0.0F);
+    CHECK(simulation.velocities()[1].x < 0.0F);
+}
+
 TEST_CASE("BirdFlight enforces minimum speed", "[simulation][birdflight]")
 {
     auto parameters = steering_test_parameters();

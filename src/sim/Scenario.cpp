@@ -147,6 +147,7 @@ ScenarioDefinition build_scenario(ScenarioType type) noexcept
     case ScenarioType::FishSchool:
         definition.display_name = "Fish School";
         definition.description = "Placeholder for future aquatic schooling and drag; currently reuses classic boids behavior.";
+        definition.simulation_parameters.model = SimulationModel::FishSchool;
         definition.simulation_parameters.random_seed = 3109U;
         definition.environment.world_half_extent = 35.0F;
         definition.behavior.cohesion_weight = 1.25F;

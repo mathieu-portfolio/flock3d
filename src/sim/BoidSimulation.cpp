@@ -71,14 +71,69 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
     }
 
     rebuild_spatial_hash();
+    update_model(dt, metrics);
 
+    if (metrics != nullptr) {
+        record_collective_metrics(*metrics);
+        metrics->finish_simulation_step(
+            positions_.size(),
+            spatial_hash_.cell_count(),
+            spatial_hash_.average_cell_occupancy(),
+            spatial_hash_.max_cell_occupancy());
+    }
+}
+
+void BoidSimulation::update_model(float dt, SimulationMetrics* metrics)
+{
+    switch (parameters_.model) {
+    case SimulationModel::ClassicBoids:
+        update_classic_boids(dt, metrics);
+        break;
+    case SimulationModel::BirdFlight:
+        update_bird_flight(dt, metrics);
+        break;
+    case SimulationModel::FishSchool:
+        update_fish_school(dt, metrics);
+        break;
+    default:
+        update_classic_boids(dt, metrics);
+        break;
+    }
+}
+
+void BoidSimulation::update_classic_boids(float dt, SimulationMetrics* metrics)
+{
+    update_shared_flocking(dt, metrics, ModelBehavior{});
+}
+
+void BoidSimulation::update_bird_flight(float dt, SimulationMetrics* metrics)
+{
+    update_shared_flocking(
+        dt,
+        metrics,
+        ModelBehavior{
+            true,
+            true,
+            true,
+        });
+}
+
+void BoidSimulation::update_fish_school(float dt, SimulationMetrics* metrics)
+{
+    // Placeholder dispatch path for future aquatic drag/current behavior.
+    // Keep shared flocking here until FishSchool gets model-specific forces.
+    update_classic_boids(dt, metrics);
+}
+
+void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
+{
+    const float query_radius = effective_query_radius(parameters_);
     const float neighbor_radius_squared = parameters_.neighbor_radius * parameters_.neighbor_radius;
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
 
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 position = positions_[i];
         const Vector3 velocity = velocities_[i];
-        const bool bird_flight = is_bird_flight();
         NeighborQueryDiagnostics query_diagnostics{};
         spatial_hash_.query_neighbors(position, query_radius, neighbor_indices_, query_diagnostics);
         if (metrics != nullptr) {
@@ -99,7 +154,7 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
             }
 
             const Vector3 offset = math::subtract(positions_[neighbor_index], position);
-            if (bird_flight && !neighbor_in_field_of_view(velocity, offset)) {
+            if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
                 continue;
             }
             const float distance_squared = math::length_squared(offset);
@@ -150,7 +205,7 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
             acceleration = math::add(acceleration, math::scale(seek(position, velocity, center), parameters_.cohesion_weight));
         }
 
-        if (bird_flight) {
+        if (behavior.add_bird_altitude_acceleration) {
             acceleration = math::add(acceleration, bird_altitude_acceleration(position));
         }
 
@@ -160,11 +215,11 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 previous_velocity = velocities_[i];
         Vector3 desired_velocity = math::add(previous_velocity, math::scale(accelerations_[i], dt));
-        if (is_bird_flight()) {
+        if (behavior.apply_bird_velocity_constraints) {
             desired_velocity = limit_turn_rate(previous_velocity, desired_velocity, dt);
         }
         desired_velocity = math::clamp_length(desired_velocity, parameters_.max_speed);
-        if (is_bird_flight()) {
+        if (behavior.apply_bird_velocity_constraints) {
             desired_velocity = enforce_min_speed(desired_velocity);
             if (parameters_.max_climb_rate > 0.0F) {
                 desired_velocity.y = std::clamp(desired_velocity.y, -parameters_.max_climb_rate, parameters_.max_climb_rate);
@@ -174,15 +229,6 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
         velocities_[i] = desired_velocity;
         positions_[i] = math::add(positions_[i], math::scale(velocities_[i], dt));
         wrap_position(positions_[i]);
-    }
-
-    if (metrics != nullptr) {
-        record_collective_metrics(*metrics);
-        metrics->finish_simulation_step(
-            positions_.size(),
-            spatial_hash_.cell_count(),
-            spatial_hash_.average_cell_occupancy(),
-            spatial_hash_.max_cell_occupancy());
     }
 }
 
@@ -195,12 +241,6 @@ void BoidSimulation::add_boid(Vector3 position, Vector3 velocity)
     if (neighbor_indices_.capacity() < positions_.size()) {
         neighbor_indices_.reserve(positions_.size());
     }
-}
-
-
-bool BoidSimulation::is_bird_flight() const noexcept
-{
-    return parameters_.model == SimulationModel::BirdFlight;
 }
 
 bool BoidSimulation::neighbor_in_field_of_view(Vector3 velocity, Vector3 offset) const noexcept

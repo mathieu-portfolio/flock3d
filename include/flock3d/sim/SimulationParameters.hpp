@@ -5,9 +5,12 @@
 
 namespace flock3d::sim {
 
+// Add new model behavior by extending BoidSimulation's model dispatch first,
+// then keep shared flocking in the reusable update path whenever possible.
 enum class SimulationModel : std::uint8_t {
     ClassicBoids = 0,
     BirdFlight,
+    FishSchool,
 };
 
 struct SimulationParameters {
