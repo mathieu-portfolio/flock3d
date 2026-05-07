@@ -8,11 +8,10 @@ study_require_python_deps
 study_build_runner
 runner="$(study_runner_path)"
 
-mkdir -p outputs/plots
+out_dir="outputs/birdflight"
+mkdir -p "${out_dir}"
 
-csv="outputs/birdflight_gravity_sweep.csv"
-plot="outputs/plots/gravity_vs_mean_altitude.png"
-
+csv="${out_dir}/birdflight_gravity_sweep.csv"
 "${runner}" \
     --preset bird_baseline \
     --seed 2401 \
@@ -24,10 +23,9 @@ plot="outputs/plots/gravity_vs_mean_altitude.png"
     --sweep gravity=6:14:2 \
     --output "${csv}"
 
-python scripts/compare_sweeps.py \
-    --input "${csv}" \
-    --sweep-column sweep_value \
-    --metric mean_altitude \
-    --output "${plot}"
+study_plot_sweep_metric "${csv}" mean_altitude "${out_dir}/gravity_vs_mean_altitude.png"
+study_plot_sweep_metric "${csv}" altitude_variance "${out_dir}/gravity_vs_altitude_variance.png"
+study_plot_sweep_metric "${csv}" stall_count "${out_dir}/gravity_vs_stall_count.png"
+study_plot_sweep_metric "${csv}" near_ground_count "${out_dir}/gravity_vs_near_ground_count.png"
 
-printf 'BirdFlight study complete:\n  CSV:  %s\n  Plot: %s\n' "${csv}" "${plot}"
+printf 'BirdFlight study complete:\n  CSV:   %s\n  Plots: %s\n' "${csv}" "${out_dir}"

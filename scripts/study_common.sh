@@ -60,3 +60,16 @@ study_runner_path() {
     printf 'Could not locate flock3d_experiment_runner under build/%s after building.\n' "${preset}" >&2
     return 1
 }
+
+
+study_plot_sweep_metric() {
+    local csv="$1"
+    local metric="$2"
+    local plot="$3"
+
+    python scripts/compare_sweeps.py \
+        --input "${csv}" \
+        --sweep-column sweep_value \
+        --metric "${metric}" \
+        --output "${plot}"
+}
