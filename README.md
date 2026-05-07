@@ -55,7 +55,7 @@ On Windows, the default debug executable is typically:
 
 ## Generate example studies
 
-Curated recipe scripts build the headless experiment runner, run deterministic one-parameter sweeps, export compact summary CSVs under `outputs/`, and render PNG plots under `outputs/plots/`. Install the plotting dependencies first if they are not already available:
+Curated recipe scripts build the headless experiment runner, run deterministic one-parameter sweeps, export compact summary CSVs and render several scenario-relevant PNG plots in dedicated folders under `outputs/`. Install the plotting dependencies first if they are not already available:
 
 ```bash
 python -m pip install pandas matplotlib
@@ -71,11 +71,11 @@ Run any study from the repository root:
 
 Expected artifacts:
 
-| Script | CSV output | Plot output | Interpretation |
+| Script | CSV output | Plot outputs | Interpretation |
 | --- | --- | --- | --- |
-| `scripts/run_noise_study.sh` | `outputs/noise_steering_sweep.csv` | `outputs/plots/noise_strength_vs_polarization.png` | Sweeps steering noise from low to high; decreasing polarization indicates collective order breaking down as control perturbations grow. |
-| `scripts/run_birdflight_study.sh` | `outputs/birdflight_gravity_sweep.csv` | `outputs/plots/gravity_vs_mean_altitude.png` | Sweeps gravity around the flight baseline; lower mean altitude indicates the altitude controller is being challenged by stronger downward acceleration. |
-| `scripts/run_fishschool_study.sh` | `outputs/fishschool_drag_sweep.csv` | `outputs/plots/drag_vs_polarization.png` | Sweeps medium drag; changes in polarization show how resistive damping affects school alignment. |
+| `scripts/run_noise_study.sh` | `outputs/noise/noise_steering_sweep.csv` | `outputs/noise/noise_strength_vs_polarization.png`<br>`outputs/noise/noise_strength_vs_order_loss.png`<br>`outputs/noise/noise_strength_vs_dispersion.png` | Sweeps steering noise from low to high; polarization and order loss track collective order, while dispersion shows whether perturbations spread the flock out. |
+| `scripts/run_birdflight_study.sh` | `outputs/birdflight/birdflight_gravity_sweep.csv` | `outputs/birdflight/gravity_vs_mean_altitude.png`<br>`outputs/birdflight/gravity_vs_altitude_variance.png`<br>`outputs/birdflight/gravity_vs_stall_count.png`<br>`outputs/birdflight/gravity_vs_near_ground_count.png` | Sweeps gravity around the flight baseline; altitude, altitude variance, stalls, and near-ground counts show whether the altitude controller remains stable. |
+| `scripts/run_fishschool_study.sh` | `outputs/fishschool/fishschool_drag_sweep.csv` | `outputs/fishschool/drag_vs_polarization.png`<br>`outputs/fishschool/drag_vs_cohesion.png`<br>`outputs/fishschool/drag_vs_average_speed.png`<br>`outputs/fishschool/drag_vs_depth_variance.png` | Sweeps medium drag; alignment, cohesion, speed, and depth variance show how resistive damping affects school coordination and depth keeping. |
 
 Set `CMAKE_PRESET` before invoking a script to use a non-default CMake preset, for example `CMAKE_PRESET=release ./scripts/run_noise_study.sh`.
 

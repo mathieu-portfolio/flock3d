@@ -8,11 +8,10 @@ study_require_python_deps
 study_build_runner
 runner="$(study_runner_path)"
 
-mkdir -p outputs/plots
+out_dir="outputs/fishschool"
+mkdir -p "${out_dir}"
 
-csv="outputs/fishschool_drag_sweep.csv"
-plot="outputs/plots/drag_vs_polarization.png"
-
+csv="${out_dir}/fishschool_drag_sweep.csv"
 "${runner}" \
     --preset fish_baseline \
     --seed 3109 \
@@ -24,10 +23,9 @@ plot="outputs/plots/drag_vs_polarization.png"
     --sweep drag_coefficient=0:1:0.25 \
     --output "${csv}"
 
-python scripts/compare_sweeps.py \
-    --input "${csv}" \
-    --sweep-column sweep_value \
-    --metric polarization \
-    --output "${plot}"
+study_plot_sweep_metric "${csv}" polarization "${out_dir}/drag_vs_polarization.png"
+study_plot_sweep_metric "${csv}" cohesion "${out_dir}/drag_vs_cohesion.png"
+study_plot_sweep_metric "${csv}" average_speed "${out_dir}/drag_vs_average_speed.png"
+study_plot_sweep_metric "${csv}" depth_variance "${out_dir}/drag_vs_depth_variance.png"
 
-printf 'FishSchool study complete:\n  CSV:  %s\n  Plot: %s\n' "${csv}" "${plot}"
+printf 'FishSchool study complete:\n  CSV:   %s\n  Plots: %s\n' "${csv}" "${out_dir}"

@@ -135,7 +135,7 @@ The `scripts/run_*_study.sh` recipe scripts turn the runner and plotting tools i
 2. Checks that `pandas` and `matplotlib` are importable and prints the install command if they are missing.
 3. Configures and builds the `flock3d_experiment_runner` target using `${CMAKE_PRESET:-debug}`.
 4. Runs a deterministic summary-mode sweep with fixed seed, boid count, timestep, duration, and sample rate.
-5. Writes a CSV in `outputs/` and a PNG in `outputs/plots/`.
+5. Writes the CSV and multiple scenario-relevant PNGs into the scenario-specific folder under `outputs/`, so each study can compare several metrics without filename conflicts.
 
 Install plotting dependencies once if needed:
 
@@ -159,13 +159,13 @@ CMAKE_PRESET=release ./scripts/run_fishschool_study.sh
 
 Expected outputs and interpretation:
 
-| Study | Deterministic sweep | CSV output | Plot output | How to read it |
+| Study | Deterministic sweep | CSV output | Plot outputs | How to read it |
 | --- | --- | --- | --- | --- |
-| Noise | `steering_noise_strength=0:0.4:0.1` with `noise_baseline` | `outputs/noise_steering_sweep.csv` | `outputs/plots/noise_strength_vs_polarization.png` | Polarization is the collective-order metric; a downward trend means injected steering perturbations are disrupting alignment. |
-| BirdFlight | `gravity=6:14:2` with `bird_baseline` | `outputs/birdflight_gravity_sweep.csv` | `outputs/plots/gravity_vs_mean_altitude.png` | Mean altitude summarizes flight stability; falling altitude at high gravity shows when lift and altitude correction can no longer maintain the target band. |
-| FishSchool | `drag_coefficient=0:1:0.25` with `fish_baseline` | `outputs/fishschool_drag_sweep.csv` | `outputs/plots/drag_vs_polarization.png` | Polarization shows school alignment; drag changes the damping regime and can either smooth or suppress coordinated motion depending on magnitude. |
+| Noise | `steering_noise_strength=0:0.4:0.1` with `noise_baseline` | `outputs/noise/noise_steering_sweep.csv` | `outputs/noise/noise_strength_vs_polarization.png`<br>`outputs/noise/noise_strength_vs_order_loss.png`<br>`outputs/noise/noise_strength_vs_dispersion.png` | Polarization and order loss capture collective-order robustness; dispersion shows whether noise also spreads the flock spatially. |
+| BirdFlight | `gravity=6:14:2` with `bird_baseline` | `outputs/birdflight/birdflight_gravity_sweep.csv` | `outputs/birdflight/gravity_vs_mean_altitude.png`<br>`outputs/birdflight/gravity_vs_altitude_variance.png`<br>`outputs/birdflight/gravity_vs_stall_count.png`<br>`outputs/birdflight/gravity_vs_near_ground_count.png` | Mean altitude, altitude variance, stalls, and near-ground counts show whether stronger gravity destabilizes flight or pushes birds toward the ground. |
+| FishSchool | `drag_coefficient=0:1:0.25` with `fish_baseline` | `outputs/fishschool/fishschool_drag_sweep.csv` | `outputs/fishschool/drag_vs_polarization.png`<br>`outputs/fishschool/drag_vs_cohesion.png`<br>`outputs/fishschool/drag_vs_average_speed.png`<br>`outputs/fishschool/drag_vs_depth_variance.png` | Polarization, cohesion, average speed, and depth variance show how drag affects school alignment, grouping, motion, and depth keeping. |
 
-The scripts intentionally use `--export-mode summary` so each sweep value contributes one averaged row, which keeps artifacts small and makes `scripts/compare_sweeps.py` the only plotting step required.
+The scripts intentionally use `--export-mode summary` so each sweep value contributes one averaged row, which keeps artifacts small. Each metric plot is still produced by the same `scripts/compare_sweeps.py` helper, keeping multi-plot recipes easy to extend.
 
 ## Suggested analysis workflow
 
