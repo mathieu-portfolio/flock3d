@@ -232,6 +232,9 @@ void Application::refresh_overlay_text(float frame_time_ms)
     const auto selected = simulation_controls_.selected_parameter();
     const auto& selected_descriptor = descriptor_for(selected);
     const auto selected_value = parameter_value(parameters, selected);
+    for (auto& overlay_line : overlay_lines_) {
+        write_literal(overlay_line, "");
+    }
     std::size_t line = 0;
 
     write_literal(overlay_lines_[line++], "flock3d scientific overlay");
@@ -299,16 +302,17 @@ void Application::refresh_overlay_text(float frame_time_ms)
         static_cast<double>(metrics_.cohesion),
         static_cast<double>(metrics_.dispersion));
     write_line(overlay_lines_[line++], "Nearest neighbor avg %.2f", static_cast<double>(metrics_.nearest_neighbor_average_distance));
-    write_line(
-        overlay_lines_[line++],
-        "Altitude mean %.2f var %.2f",
-        static_cast<double>(metrics_.mean_altitude),
-        static_cast<double>(metrics_.altitude_variance));
-    write_line(
-        overlay_lines_[line++],
-        "Stalls %-5zu   Near ground %-5zu",
-        metrics_.stall_count,
-        metrics_.near_ground_count);
+    if (active_scenario_.type == sim::ScenarioType::BirdFlight) {
+        write_literal(overlay_lines_[line++], "BirdFlight stability");
+        write_line(
+            overlay_lines_[line++],
+            "Alt mean %.2f var %.2f stalls %zu",
+            static_cast<double>(metrics_.mean_altitude),
+            static_cast<double>(metrics_.altitude_variance),
+            metrics_.stall_count);
+    } else {
+        line += 2;
+    }
     write_literal(overlay_lines_[line++], "");
     write_literal(overlay_lines_[line++], "Metrics export");
     write_line(
