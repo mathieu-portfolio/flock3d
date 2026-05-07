@@ -231,6 +231,41 @@ Example FishSchool experiments:
   --output outputs/fish_current_sweep.csv
 ```
 
+
+## Python CSV analysis
+
+CSV exports are intended to feed lightweight offline analysis instead of adding plotting code to the C++ application. Install the Python plotting dependencies with:
+
+```bash
+python3 -m pip install pandas matplotlib
+```
+
+Plot any sampled metric against another CSV column, such as polarization over simulation time:
+
+```bash
+python3 scripts/plot_metric.py \
+  --input outputs/run.csv \
+  --x simulation_time \
+  --y polarization \
+  --output outputs/polarization.png
+```
+
+Compare one-parameter sweep exports by grouping rows by `sweep_value`, computing the mean metric for each sweep value, and plotting the result:
+
+```bash
+python3 scripts/compare_sweeps.py \
+  --input outputs/noise_sweep.csv \
+  --sweep-column sweep_value \
+  --metric polarization \
+  --output outputs/noise_vs_polarization.png
+```
+
+Suggested first analyses:
+
+- Noise strength vs. polarization for NoiseExperiment order robustness.
+- Gravity vs. altitude variance for BirdFlight stability.
+- Drag vs. cohesion for FishSchool compactness.
+
 ## Metrics and experiments
 
 `flock3d` records sampled macroscopic metrics rather than per-frame dumps. The interactive app writes CSV files under `outputs/`, and `flock3d_experiment_runner` provides deterministic headless runs, one-parameter sweeps, and BirdFlight and FishSchool presets for comparing flight-stability and resistive-medium schooling behavior. See [docs/experiments.md](docs/experiments.md) for the CSV schema, export modes, BirdFlight stability metrics, FishSchool depth metrics, preset lists, and example experiment commands.

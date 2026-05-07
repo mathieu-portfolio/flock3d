@@ -88,6 +88,41 @@ One-parameter sweeps use inclusive `start:end:step` ranges. Only one `--sweep` a
 
 BirdFlight sweeps support at least `gravity`, `lift_strength`, `max_turn_rate`, `field_of_view_degrees`, and `altitude_correction_strength`. NoiseExperiment sweeps support `perception_noise_strength` and `steering_noise_strength`, with `velocity_noise_strength`, `noise_seed_offset`, and `noise_enabled` available for targeted overrides.
 
+
+## Python CSV analysis tools
+
+The repository includes small Python scripts for the final analysis step from simulation to CSV to plot. They intentionally keep plotting outside the C++ app and avoid notebooks, GUI code, seaborn, Parquet/HDF5, and complex statistics. Install the required Python packages with:
+
+```bash
+python3 -m pip install pandas matplotlib
+```
+
+Use `plot_metric.py` for a direct metric-over-time or metric-vs-metric plot from any sampled CSV export:
+
+```bash
+python3 scripts/plot_metric.py \
+  --input outputs/run.csv \
+  --x simulation_time \
+  --y polarization \
+  --output outputs/polarization.png
+```
+
+Use `compare_sweeps.py` for one-parameter sweep CSVs. It groups rows by the selected sweep column, computes the mean of the metric for each value, and plots the sweep value against that mean:
+
+```bash
+python3 scripts/compare_sweeps.py \
+  --input outputs/noise_sweep.csv \
+  --sweep-column sweep_value \
+  --metric polarization \
+  --output outputs/noise_vs_polarization.png
+```
+
+Both scripts check that requested columns exist and exit with an error listing the available columns when a CSV schema or CLI argument does not match. Useful starter comparisons include:
+
+- Noise strength vs. polarization: sweep `steering_noise_strength` or `perception_noise_strength`, then plot mean `polarization`.
+- Gravity vs. altitude variance: sweep BirdFlight `gravity`, then plot mean `altitude_variance`.
+- Drag vs. cohesion: sweep FishSchool `drag_coefficient`, then plot mean `cohesion`.
+
 ## BirdFlight presets
 
 The experiment runner supports `--preset <name>`. Presets apply defaults first, then explicit CLI options such as `--seed`, `--boids`, `--duration`, `--sample-rate`, `--export-mode`, `--output`, and `--sweep` are applied after the preset.
