@@ -102,13 +102,13 @@ The repository includes small Python scripts for the final analysis step from si
 Install plotting dependencies:
 
 ```bash
-python3 -m pip install pandas matplotlib
+python -m pip install pandas matplotlib
 ```
 
 Plot any sampled metric against another CSV column:
 
 ```bash
-python3 scripts/plot_metric.py \
+python scripts/plot_metric.py \
   --input outputs/run.csv \
   --x simulation_time \
   --y polarization \
@@ -118,7 +118,7 @@ python3 scripts/plot_metric.py \
 Compare one-parameter sweep exports by grouping rows by a sweep column and plotting each value against the mean metric:
 
 ```bash
-python3 scripts/compare_sweeps.py \
+python scripts/compare_sweeps.py \
   --input outputs/noise_sweep.csv \
   --sweep-column sweep_value \
   --metric polarization \
@@ -140,7 +140,7 @@ The `scripts/run_*_study.sh` recipe scripts turn the runner and plotting tools i
 Install plotting dependencies once if needed:
 
 ```bash
-python3 -m pip install pandas matplotlib
+python -m pip install pandas matplotlib
 ```
 
 Run the curated studies from the repository root:

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Plot one metric column against another from a flock3d CSV export."""
 
 from __future__ import annotations

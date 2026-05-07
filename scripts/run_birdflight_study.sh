@@ -24,7 +24,7 @@ plot="outputs/plots/gravity_vs_mean_altitude.png"
     --sweep gravity=6:14:2 \
     --output "${csv}"
 
-python3 scripts/compare_sweeps.py \
+python scripts/compare_sweeps.py \
     --input "${csv}" \
     --sweep-column sweep_value \
     --metric mean_altitude \

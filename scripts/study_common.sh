@@ -10,7 +10,7 @@ study_repo_root() {
 }
 
 study_require_python_deps() {
-    python3 - <<'PY'
+    python - <<'PY'
 import importlib.util
 import sys
 
@@ -18,7 +18,7 @@ missing = [name for name in ("pandas", "matplotlib") if importlib.util.find_spec
 if missing:
     print(
         "Missing Python plotting dependencies: " + ", ".join(missing) +
-        ". Install them with: python3 -m pip install pandas matplotlib",
+        ". Install them with: python -m pip install pandas matplotlib",
         file=sys.stderr,
     )
     raise SystemExit(1)

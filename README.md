@@ -58,7 +58,7 @@ On Windows, the default debug executable is typically:
 Curated recipe scripts build the headless experiment runner, run deterministic one-parameter sweeps, export compact summary CSVs under `outputs/`, and render PNG plots under `outputs/plots/`. Install the plotting dependencies first if they are not already available:
 
 ```bash
-python3 -m pip install pandas matplotlib
+python -m pip install pandas matplotlib
 ```
 
 Run any study from the repository root:

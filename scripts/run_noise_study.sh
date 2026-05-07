@@ -24,7 +24,7 @@ plot="outputs/plots/noise_strength_vs_polarization.png"
     --sweep steering_noise_strength=0:0.4:0.1 \
     --output "${csv}"
 
-python3 scripts/compare_sweeps.py \
+python scripts/compare_sweeps.py \
     --input "${csv}" \
     --sweep-column sweep_value \
     --metric polarization \

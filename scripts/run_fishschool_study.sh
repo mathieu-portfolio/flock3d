@@ -24,7 +24,7 @@ plot="outputs/plots/drag_vs_polarization.png"
     --sweep drag_coefficient=0:1:0.25 \
     --output "${csv}"
 
-python3 scripts/compare_sweeps.py \
+python scripts/compare_sweeps.py \
     --input "${csv}" \
     --sweep-column sweep_value \
     --metric polarization \

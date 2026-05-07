@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Compare one-parameter sweep CSV exports by plotting mean metric per sweep value."""
 
 from __future__ import annotations
