@@ -5,6 +5,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+
 TEST_CASE("CSV metrics writer exposes required header", "[experiment][csv]")
 {
     CHECK(flock3d::experiment::CsvMetricsWriter::header()
@@ -119,4 +124,116 @@ TEST_CASE("Experiment sweeps BirdFlight constraint parameters", "[experiment][sw
     CHECK(parameters.field_of_view_degrees == Catch::Approx(210.0F));
     CHECK(flock3d::experiment::apply_sweep_value(parameters, "altitude_correction_strength", 2.25));
     CHECK(parameters.altitude_correction_strength == Catch::Approx(2.25F));
+}
+
+
+TEST_CASE("BirdFlight experiment presets are discoverable", "[experiment][preset][birdflight]")
+{
+    const auto names = flock3d::experiment::experiment_preset_names();
+    CHECK(names.size() == 5);
+    CHECK(flock3d::experiment::experiment_preset("bird_baseline").has_value());
+    CHECK(flock3d::experiment::experiment_preset("bird_low_lift").has_value());
+    CHECK(flock3d::experiment::experiment_preset("bird_high_gravity").has_value());
+    CHECK(flock3d::experiment::experiment_preset("bird_narrow_fov").has_value());
+    CHECK(flock3d::experiment::experiment_preset("bird_low_turn_rate").has_value());
+    CHECK_FALSE(flock3d::experiment::experiment_preset("unknown").has_value());
+}
+
+TEST_CASE("BirdFlight preset initialization is deterministic", "[experiment][preset][birdflight]")
+{
+    flock3d::experiment::ExperimentConfig first{};
+    flock3d::experiment::ExperimentConfig second{};
+
+    REQUIRE(flock3d::experiment::apply_experiment_preset(first, "bird_high_gravity"));
+    REQUIRE(flock3d::experiment::apply_experiment_preset(second, "bird_high_gravity"));
+
+    const auto first_parameters = flock3d::experiment::experiment_parameters(first);
+    const auto second_parameters = flock3d::experiment::experiment_parameters(second);
+    CHECK(first.scenario == flock3d::sim::ScenarioType::BirdFlight);
+    CHECK(first_parameters.model == flock3d::sim::SimulationModel::BirdFlight);
+    CHECK(first_parameters.random_seed == second_parameters.random_seed);
+    CHECK(first_parameters.gravity == second_parameters.gravity);
+    CHECK(first_parameters.lift_strength == second_parameters.lift_strength);
+    CHECK(first_parameters.field_of_view_degrees == second_parameters.field_of_view_degrees);
+    CHECK(first_parameters.max_turn_rate == second_parameters.max_turn_rate);
+}
+
+TEST_CASE("CLI overrides take precedence after preset defaults", "[experiment][preset][cli]")
+{
+    std::string error{};
+    char program[] = "flock3d_experiment_runner";
+    char preset_flag[] = "--preset";
+    char preset_name[] = "bird_high_gravity";
+    char seed_flag[] = "--seed";
+    char seed_value[] = "77";
+    char boids_flag[] = "--boids";
+    char boids_value[] = "96";
+    char sweep_flag[] = "--sweep";
+    char sweep_value[] = "gravity=7:7:1";
+    char* argv[] = {
+        program,
+        preset_flag,
+        preset_name,
+        seed_flag,
+        seed_value,
+        boids_flag,
+        boids_value,
+        sweep_flag,
+        sweep_value,
+    };
+
+    auto config = flock3d::experiment::parse_cli(static_cast<int>(std::size(argv)), argv, error);
+    REQUIRE(config.has_value());
+    CHECK(config->scenario == flock3d::sim::ScenarioType::BirdFlight);
+    CHECK(config->seed == 77U);
+    CHECK(config->boids == 96U);
+    REQUIRE(config->sweep.has_value());
+    CHECK(config->sweep->parameter == "gravity");
+
+    auto parameters = flock3d::experiment::experiment_parameters(*config);
+    CHECK(parameters.gravity == Catch::Approx(12.5F));
+    REQUIRE(flock3d::experiment::apply_sweep_value(parameters, config->sweep->parameter, config->sweep->start));
+    CHECK(parameters.gravity == Catch::Approx(7.0F));
+}
+
+TEST_CASE("BirdFlight sampled and summary exports include stability metrics", "[experiment][csv][birdflight]")
+{
+    const auto output_dir = std::filesystem::temp_directory_path() / "flock3d_test_exports";
+    std::filesystem::create_directories(output_dir);
+
+    flock3d::experiment::ExperimentConfig sampled{};
+    REQUIRE(flock3d::experiment::apply_experiment_preset(sampled, "bird_baseline"));
+    sampled.seed = 11U;
+    sampled.boids = 16U;
+    sampled.duration_seconds = 0.25;
+    sampled.sample_rate_hz = 4.0;
+    sampled.output_path = output_dir / "bird_sampled.csv";
+    sampled.export_mode = flock3d::experiment::ExportMode::SampledTimeSeries;
+
+    const auto sampled_result = flock3d::experiment::run_experiment(sampled);
+    CHECK(sampled_result.rows_written == 1U);
+
+    std::ifstream sampled_stream{sampled.output_path};
+    REQUIRE(sampled_stream.is_open());
+    std::string sampled_header{};
+    std::string sampled_row{};
+    std::getline(sampled_stream, sampled_header);
+    std::getline(sampled_stream, sampled_row);
+    CHECK(sampled_header.find("mean_altitude,altitude_variance,stall_count") != std::string::npos);
+    CHECK(sampled_row.find("Bird Flight") != std::string::npos);
+
+    auto summary = sampled;
+    summary.output_path = output_dir / "bird_summary.csv";
+    summary.export_mode = flock3d::experiment::ExportMode::Summary;
+    const auto summary_result = flock3d::experiment::run_experiment(summary);
+    CHECK(summary_result.rows_written == 1U);
+
+    std::ifstream summary_stream{summary.output_path};
+    REQUIRE(summary_stream.is_open());
+    std::string summary_header{};
+    std::string summary_row{};
+    std::getline(summary_stream, summary_header);
+    std::getline(summary_stream, summary_row);
+    CHECK(summary_header.find("mean_altitude,altitude_variance,stall_count") != std::string::npos);
+    CHECK(summary_row.find("Summary") != std::string::npos);
 }

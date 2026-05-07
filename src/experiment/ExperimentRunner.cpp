@@ -1,5 +1,6 @@
 #include <flock3d/experiment/ExperimentRunner.hpp>
 
+#include <array>
 #include <charconv>
 #include <cmath>
 #include <iostream>
@@ -34,6 +35,26 @@ namespace {
     return value;
 }
 
+
+[[nodiscard]] sim::SimulationParameters bird_preset_parameters(
+    float lift_strength,
+    float gravity,
+    float field_of_view_degrees,
+    float max_turn_rate)
+{
+    auto parameters = sim::build_scenario(sim::ScenarioType::BirdFlight).simulation_parameters;
+    parameters.lift_strength = lift_strength;
+    parameters.gravity = gravity;
+    parameters.field_of_view_degrees = field_of_view_degrees;
+    parameters.max_turn_rate = max_turn_rate;
+    return parameters;
+}
+
+[[nodiscard]] constexpr std::array<std::string_view, 5> preset_name_storage() noexcept
+{
+    return {"bird_baseline", "bird_low_lift", "bird_high_gravity", "bird_narrow_fov", "bird_low_turn_rate"};
+}
+
 [[nodiscard]] std::string value_string(double value)
 {
     std::ostringstream stream;
@@ -47,8 +68,7 @@ void run_single_value(
     std::optional<std::pair<std::string, double>> sweep,
     std::size_t& rows_written)
 {
-    auto scenario = sim::build_scenario(config.scenario);
-    auto parameters = scenario.simulation_parameters;
+    auto parameters = experiment_parameters(config);
     parameters.random_seed = config.seed;
     parameters.boid_count = config.boids;
     if (sweep.has_value() && !apply_sweep_value(parameters, sweep->first, sweep->second)) {
@@ -122,6 +142,73 @@ void run_single_value(
 }
 
 } // namespace
+
+
+std::optional<ExperimentPreset> experiment_preset(std::string_view name)
+{
+    if (name == "bird_baseline") {
+        return ExperimentPreset{
+            "bird_baseline",
+            "BirdFlight default stability baseline",
+            sim::ScenarioType::BirdFlight,
+            bird_preset_parameters(9.8F, 9.8F, 220.0F, 120.0F)};
+    }
+    if (name == "bird_low_lift") {
+        return ExperimentPreset{
+            "bird_low_lift",
+            "BirdFlight with reduced lift",
+            sim::ScenarioType::BirdFlight,
+            bird_preset_parameters(8.2F, 9.8F, 220.0F, 120.0F)};
+    }
+    if (name == "bird_high_gravity") {
+        return ExperimentPreset{
+            "bird_high_gravity",
+            "BirdFlight with stronger gravity",
+            sim::ScenarioType::BirdFlight,
+            bird_preset_parameters(9.8F, 12.5F, 220.0F, 120.0F)};
+    }
+    if (name == "bird_narrow_fov") {
+        return ExperimentPreset{
+            "bird_narrow_fov",
+            "BirdFlight with narrower forward field of view",
+            sim::ScenarioType::BirdFlight,
+            bird_preset_parameters(9.8F, 9.8F, 140.0F, 120.0F)};
+    }
+    if (name == "bird_low_turn_rate") {
+        return ExperimentPreset{
+            "bird_low_turn_rate",
+            "BirdFlight with limited turn response",
+            sim::ScenarioType::BirdFlight,
+            bird_preset_parameters(9.8F, 9.8F, 220.0F, 70.0F)};
+    }
+    return std::nullopt;
+}
+
+std::span<const std::string_view> experiment_preset_names() noexcept
+{
+    static constexpr auto names = preset_name_storage();
+    return names;
+}
+
+bool apply_experiment_preset(ExperimentConfig& config, std::string_view name)
+{
+    const auto preset = experiment_preset(name);
+    if (!preset.has_value()) {
+        return false;
+    }
+    config.preset = std::string{name};
+    config.scenario = preset->scenario;
+    config.parameter_defaults = preset->parameters;
+    return true;
+}
+
+sim::SimulationParameters experiment_parameters(const ExperimentConfig& config)
+{
+    if (config.parameter_defaults.has_value()) {
+        return *config.parameter_defaults;
+    }
+    return sim::build_scenario(config.scenario).simulation_parameters;
+}
 
 std::optional<SweepDefinition> parse_sweep(std::string_view text)
 {
@@ -205,6 +292,10 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
         parameters.gravity = float_value;
         return true;
     }
+    if (parameter == "lift_strength" || parameter == "lift") {
+        parameters.lift_strength = float_value;
+        return true;
+    }
     if (parameter == "max_turn_rate") {
         parameters.max_turn_rate = float_value;
         return true;
@@ -223,6 +314,22 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
 std::optional<ExperimentConfig> parse_cli(int argc, char** argv, std::string& error)
 {
     ExperimentConfig config{};
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg{argv[i]};
+        if (arg == "--preset") {
+            if (i + 1 >= argc) {
+                error = "missing value for --preset";
+                return std::nullopt;
+            }
+            ++i;
+            if (!apply_experiment_preset(config, argv[i])) {
+                error = "unknown preset: ";
+                error += argv[i];
+                return std::nullopt;
+            }
+        }
+    }
+
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg{argv[i]};
         const auto read_value = [&]() -> std::optional<std::string_view> {
@@ -247,6 +354,12 @@ std::optional<ExperimentConfig> parse_cli(int argc, char** argv, std::string& er
                 return std::nullopt;
             }
             config.scenario = *scenario;
+            config.parameter_defaults = sim::build_scenario(*scenario).simulation_parameters;
+        } else if (arg == "--preset") {
+            const auto value = read_value();
+            if (!value.has_value()) {
+                return std::nullopt;
+            }
         } else if (arg == "--seed") {
             const auto value = read_value();
             const auto seed = value.has_value() ? parse_u32(*value) : std::optional<std::uint32_t>{};
