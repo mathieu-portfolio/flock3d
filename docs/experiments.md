@@ -140,3 +140,40 @@ Override run size and seed while keeping the narrow-FOV preset parameters:
   --duration 30 \
   --output outputs/bird_narrow_fov_seed2401.csv
 ```
+
+
+## FishSchool experiments
+
+FishSchool uses the same separation/alignment/cohesion observables as ClassicBoids, with additional resistive-medium parameters for underwater-style motion:
+
+- `drag_coefficient` dampens velocity every simulation step.
+- `buoyancy_strength` adds positive-`y` acceleration.
+- `target_depth`, `depth_band`, and `depth_correction_strength` keep the school near a preferred depth band.
+- `current_strength` and `current_direction` add an optional constant current influence.
+- `max_turn_rate` limits heading changes for smoother turns.
+
+FishSchool exports include `mean_depth`, `depth_variance`, and `average_speed` alongside polarization, cohesion, dispersion, neighbor, and timing metrics. Presets are `fish_baseline`, `fish_high_drag`, `fish_strong_current`, and `fish_low_visibility`; CLI values and sweeps still apply after preset defaults.
+
+Example commands:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --preset fish_baseline \
+  --duration 30 \
+  --sample-rate 5 \
+  --output outputs/fish_baseline.csv
+
+./build/local/bin/flock3d_experiment_runner \
+  --preset fish_baseline \
+  --sweep drag_coefficient=0.1:0.9:0.2 \
+  --duration 45 \
+  --export-mode summary \
+  --output outputs/fish_drag_sweep.csv
+
+./build/local/bin/flock3d_experiment_runner \
+  --preset fish_strong_current \
+  --sweep current_strength=0:4:1 \
+  --seed 3109 \
+  --boids 1024 \
+  --output outputs/fish_current_sweep.csv
+```

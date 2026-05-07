@@ -106,6 +106,13 @@ void sync_plain_settings_to_parameters(ScenarioDefinition& definition) noexcept
     definition.simulation_parameters.max_climb_rate = definition.constraints.max_climb_rate;
     definition.simulation_parameters.max_turn_rate = definition.constraints.max_turn_rate;
     definition.simulation_parameters.field_of_view_degrees = definition.constraints.field_of_view_degrees;
+    definition.simulation_parameters.drag_coefficient = definition.constraints.drag_coefficient;
+    definition.simulation_parameters.buoyancy_strength = definition.constraints.buoyancy_strength;
+    definition.simulation_parameters.target_depth = definition.constraints.target_depth;
+    definition.simulation_parameters.depth_band = definition.constraints.depth_band;
+    definition.simulation_parameters.depth_correction_strength = definition.constraints.depth_correction_strength;
+    definition.simulation_parameters.current_strength = definition.constraints.current_strength;
+    definition.simulation_parameters.current_direction = definition.constraints.current_direction;
     definition.simulation_parameters.separation_weight = definition.behavior.separation_weight;
     definition.simulation_parameters.alignment_weight = definition.behavior.alignment_weight;
     definition.simulation_parameters.cohesion_weight = definition.behavior.cohesion_weight;
@@ -146,11 +153,26 @@ ScenarioDefinition build_scenario(ScenarioType type) noexcept
         break;
     case ScenarioType::FishSchool:
         definition.display_name = "Fish School";
-        definition.description = "Placeholder for future aquatic schooling and drag; currently reuses classic boids behavior.";
+        definition.description = "Resistive-medium schooling with drag, depth preference, smooth turning, and optional current.";
         definition.simulation_parameters.model = SimulationModel::FishSchool;
         definition.simulation_parameters.random_seed = 3109U;
+        definition.simulation_parameters.min_initial_speed = 1.5F;
+        definition.simulation_parameters.max_initial_speed = 4.5F;
         definition.environment.world_half_extent = 35.0F;
-        definition.behavior.cohesion_weight = 1.25F;
+        definition.constraints.max_speed = 6.0F;
+        definition.constraints.max_force = 7.0F;
+        definition.constraints.max_turn_rate = 80.0F;
+        definition.constraints.drag_coefficient = 0.35F;
+        definition.constraints.buoyancy_strength = 0.15F;
+        definition.constraints.target_depth = -8.0F;
+        definition.constraints.depth_band = 5.0F;
+        definition.constraints.depth_correction_strength = 0.8F;
+        definition.constraints.current_strength = 0.0F;
+        definition.constraints.current_direction = Vector3{1.0F, 0.0F, 0.0F};
+        definition.behavior.alignment_weight = 1.15F;
+        definition.behavior.cohesion_weight = 1.35F;
+        definition.behavior.neighbor_radius = 5.0F;
+        definition.behavior.separation_radius = 1.5F;
         break;
     case ScenarioType::PredatorPrey:
         definition.display_name = "Predator-Prey";

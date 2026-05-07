@@ -61,6 +61,8 @@ struct SummaryStatistics {
     double mean_average_speed{};
     double mean_average_neighbors{};
     double mean_nearest_neighbor_distance{};
+    double mean_depth{};
+    double mean_depth_variance{};
     double mean_altitude{};
     double mean_altitude_variance{};
     double mean_stall_count{};
@@ -85,6 +87,8 @@ private:
     double average_speed_total_{};
     double average_neighbors_total_{};
     double nearest_neighbor_distance_total_{};
+    double depth_total_{};
+    double depth_variance_total_{};
     double altitude_total_{};
     double altitude_variance_total_{};
     double stall_count_total_{};

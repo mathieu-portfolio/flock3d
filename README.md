@@ -1,6 +1,6 @@
 # flock3d
 
-`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, quantitative flock metrics, and the first physically constrained Bird Flight scenario so future fish, predator/prey, obstacle, leadership, and noise models can be added as isolated scenarios instead of ad-hoc flags.
+`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, quantitative flock metrics, the physically constrained Bird Flight scenario, and Fish School resistive-medium flocking so future predator/prey, obstacle, leadership, and noise models can be isolated as scenarios instead of ad-hoc flags.
 
 ## Features
 
@@ -11,10 +11,10 @@
 - **Deterministic fixed timestep** simulation loop at 120 Hz.
 - **Simulation/rendering separation** so flock behavior can evolve without coupling to drawing code.
 - **Data-oriented SoA storage** for boid positions, velocities, and accelerations.
-- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, boid count, and Bird Flight constraint sweeps such as gravity, turn rate, field of view, and altitude correction.
+- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, boid count, and Bird Flight constraint sweeps such as gravity, turn rate, field of view, and altitude correction, plus Fish School sweeps such as drag, depth correction, target depth, and current strength.
 - **Scenario definitions** with display text, default simulation parameters, environment settings, constraints, behavior settings, metric settings, and deterministic seeds.
 - **Reproducible seed handling** so resetting a scenario with the same seed recreates the same initial boid positions and velocities.
-- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, collective-behavior order parameters, and Bird Flight altitude/stall observables.
+- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, collective-behavior order parameters, and Bird Flight altitude/stall observables, plus Fish School depth/speed observables.
 - **Sampled CSV metrics export** for reproducible experiments without per-frame dumps.
 - **Headless experiment runner** (`flock3d_experiment_runner`) for deterministic scripted runs and one-parameter sweeps without opening a raylib window.
 - **Configurable directional boid scale** via simulation parameters.
@@ -97,13 +97,13 @@ This keeps the initial implementation simple while preserving a path toward cach
 
 ## v2 scientific scenarios
 
-The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. **Classic Boids** is the unconstrained baseline. **Bird Flight** is the first constrained behavior model and reuses the separation/alignment/cohesion rules only after applying scenario-specific perception and flight limits. The remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
+The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. **Classic Boids** is the unconstrained baseline. **Bird Flight** adds scenario-specific perception and flight limits. **Fish School** reuses the shared separation/alignment/cohesion rules inside a resistive underwater-style medium with drag, depth preference, smooth turning, and optional current. The remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
 
 Current scenarios:
 
 - **Classic Boids**: baseline Reynolds-style separation, alignment, and cohesion in a wrapped 3D world.
 - **Bird Flight**: gravity-aware flocking with upward lift, altitude hold, minimum airspeed, climb-rate limits, turn-rate limits, and a forward field of view.
-- **Fish School**: placeholder for future aquatic schooling and drag.
+- **Fish School**: underwater-style schooling with lower default speeds, velocity drag, buoyancy, target-depth correction, smooth turn-rate limiting, and optional constant current flow.
 - **Predator-Prey**: placeholder for future predator/prey roles and pursuit/evasion.
 - **Obstacle Avoidance**: placeholder for future obstacle fields and avoidance responses.
 - **Leadership**: placeholder for future informed-leader experiments.
@@ -167,9 +167,48 @@ Use these diagnostics first to distinguish render-bound frames from simulation-b
 - `Esc`: close the window.
 
 
+## FishSchool resistive-medium model
+
+FishSchool is a distinct underwater-style model for studying how drag, depth preference, and currents affect collective order and cohesion in 3D. It reuses shared separation, alignment, and cohesion, then applies FishSchool-specific constraints each step:
+
+- `drag_coefficient`: velocity damping from medium resistance.
+- `buoyancy_strength`: constant positive-`y` acceleration.
+- `target_depth`: preferred `y` coordinate; default FishSchool values use negative `y` as deeper water.
+- `depth_band`: tolerance around the target before correction is applied.
+- `depth_correction_strength`: acceleration back toward the target-depth band.
+- `current_strength`: optional constant current influence magnitude.
+- `current_direction`: current vector direction before normalization.
+- `max_turn_rate`: heading-change limit in degrees per second for smoother, slower motion than ClassicBoids.
+
+FishSchool metrics are `mean_depth`, `depth_variance`, and the shared `average_speed`. These appear in the overlay when FishSchool is active and are included in sampled CSV and summary exports.
+
+Example FishSchool experiments:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --preset fish_baseline \
+  --duration 30 \
+  --sample-rate 5 \
+  --output outputs/fish_baseline.csv
+
+./build/local/bin/flock3d_experiment_runner \
+  --preset fish_baseline \
+  --sweep drag_coefficient=0.1:0.9:0.2 \
+  --duration 45 \
+  --export-mode summary \
+  --output outputs/fish_drag_sweep.csv
+
+./build/local/bin/flock3d_experiment_runner \
+  --preset fish_strong_current \
+  --sweep current_strength=0:4:1 \
+  --seed 3109 \
+  --boids 1024 \
+  --output outputs/fish_current_sweep.csv
+```
+
 ## Metrics and experiments
 
-`flock3d` records sampled macroscopic metrics rather than per-frame dumps. The interactive app writes CSV files under `outputs/`, and `flock3d_experiment_runner` provides deterministic headless runs, one-parameter sweeps, and BirdFlight presets for comparing flight-stability behavior. See [docs/experiments.md](docs/experiments.md) for the CSV schema, export modes, BirdFlight stability metrics, preset list, and example experiment commands.
+`flock3d` records sampled macroscopic metrics rather than per-frame dumps. The interactive app writes CSV files under `outputs/`, and `flock3d_experiment_runner` provides deterministic headless runs, one-parameter sweeps, and BirdFlight and FishSchool presets for comparing flight-stability and resistive-medium schooling behavior. See [docs/experiments.md](docs/experiments.md) for the CSV schema, export modes, BirdFlight stability metrics, FishSchool depth metrics, preset lists, and example experiment commands.
 
 ## Debug overlay and metrics
 
@@ -187,6 +226,7 @@ Displayed metrics include:
 - **Average speed**: mean velocity magnitude across all boids.
 - **Nearest-neighbor average distance**: average nearest observed neighbor distance gathered during the existing spatial-hash neighbor queries.
 - **Mean altitude / altitude variance**: vertical center and spread of the flock, useful for Bird Flight altitude-hold studies.
+- **FishSchool depth metrics**: `mean_depth` and `depth_variance` when the FishSchool scenario is active.
 - **Stall count**: boids below `min_speed` after the latest update.
 - **Near-ground count**: boids at or below the simple `y <= 0` ground reference.
 - **Cluster count**: reserved as a TODO metric until connectivity semantics are defined for scenario-specific models.
@@ -194,7 +234,7 @@ Displayed metrics include:
 - **Render time**: wall-clock duration of the most recent 3D draw pass.
 - **Spatial hash cell count**: occupied cells after the latest hash rebuild.
 - **Neighbor queries**: number of spatial neighbor queries issued by the latest fixed simulation step.
-- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, separation radius, max speed, max force, boid scale, gravity, max turn rate, field of view, and altitude correction strength.
+- **Current flocking parameters**: live values for separation, alignment, cohesion, perception radius, separation radius, max speed, max force, boid scale, gravity, max turn rate, field of view, altitude correction strength, and FishSchool medium controls such as drag, buoyancy, target depth, depth correction, and current strength.
 
 ## Screenshots
 
@@ -202,7 +242,7 @@ Screenshots and capture notes for the debug overlay and larger flock scenarios w
 
 ## Roadmap
 
-- Refine isolated fish-school, predator/prey, obstacle-avoidance, leadership, and noise behavior models.
+- Refine predator/prey, obstacle-avoidance, leadership, and noise behavior models.
 - Add deterministic scenario fixtures for simulation regression tests.
 - Define cluster-count connectivity semantics for scientific metrics.
 - Implement full-trajectory export when a compact trajectory schema is defined.
