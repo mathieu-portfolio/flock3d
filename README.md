@@ -53,6 +53,32 @@ On Windows, the default debug executable is typically:
 .\build\debug\Debug\flock3d.exe
 ```
 
+## Generate example studies
+
+Curated recipe scripts build the headless experiment runner, run deterministic one-parameter sweeps, export compact summary CSVs under `outputs/`, and render PNG plots under `outputs/plots/`. Install the plotting dependencies first if they are not already available:
+
+```bash
+python3 -m pip install pandas matplotlib
+```
+
+Run any study from the repository root:
+
+```bash
+./scripts/run_noise_study.sh
+./scripts/run_birdflight_study.sh
+./scripts/run_fishschool_study.sh
+```
+
+Expected artifacts:
+
+| Script | CSV output | Plot output | Interpretation |
+| --- | --- | --- | --- |
+| `scripts/run_noise_study.sh` | `outputs/noise_steering_sweep.csv` | `outputs/plots/noise_strength_vs_polarization.png` | Sweeps steering noise from low to high; decreasing polarization indicates collective order breaking down as control perturbations grow. |
+| `scripts/run_birdflight_study.sh` | `outputs/birdflight_gravity_sweep.csv` | `outputs/plots/gravity_vs_mean_altitude.png` | Sweeps gravity around the flight baseline; lower mean altitude indicates the altitude controller is being challenged by stronger downward acceleration. |
+| `scripts/run_fishschool_study.sh` | `outputs/fishschool_drag_sweep.csv` | `outputs/plots/drag_vs_polarization.png` | Sweeps medium drag; changes in polarization show how resistive damping affects school alignment. |
+
+Set `CMAKE_PRESET` before invoking a script to use a non-default CMake preset, for example `CMAKE_PRESET=release ./scripts/run_noise_study.sh`.
+
 ## Screenshots and plots
 
 Visual artifacts are intentionally kept as placeholders until the capture set is curated:
