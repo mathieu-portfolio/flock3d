@@ -26,8 +26,9 @@ namespace {
 
 BoidSimulation::BoidSimulation(SimulationParameters parameters)
     : parameters_{parameters}
-    , spatial_hash_{parameters.spatial_cell_size}
+    , spatial_hash_{effective_query_radius(parameters)}
 {
+    sync_spatial_cell_size_to_query_radius(parameters_);
     reset(parameters_.boid_count);
 }
 
@@ -52,6 +53,7 @@ void BoidSimulation::reset(std::uint32_t boid_count)
 void BoidSimulation::apply_parameters(const SimulationParameters& parameters)
 {
     parameters_ = parameters;
+    sync_spatial_cell_size_to_query_radius(parameters_);
     spatial_hash_ = SpatialHash3D{parameters_.spatial_cell_size};
     reset(parameters_.boid_count);
 }
@@ -62,11 +64,16 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
         metrics->begin_simulation_step();
     }
 
+    const float query_radius = effective_query_radius(parameters_);
+    if (parameters_.spatial_cell_size != query_radius) {
+        parameters_.spatial_cell_size = query_radius;
+        spatial_hash_ = SpatialHash3D{parameters_.spatial_cell_size};
+    }
+
     rebuild_spatial_hash();
 
     const float neighbor_radius_squared = parameters_.neighbor_radius * parameters_.neighbor_radius;
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
-    const float query_radius = std::max(parameters_.neighbor_radius, parameters_.separation_radius);
 
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 position = positions_[i];

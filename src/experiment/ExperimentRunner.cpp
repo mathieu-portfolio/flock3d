@@ -174,7 +174,7 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
     const auto float_value = static_cast<float>(value);
     if (parameter == "perception_radius" || parameter == "neighbor_radius") {
         parameters.neighbor_radius = float_value;
-        parameters.spatial_cell_size = float_value;
+        sim::sync_spatial_cell_size_to_query_radius(parameters);
         return true;
     }
     if (parameter == "alignment_weight") {
@@ -191,6 +191,7 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
     }
     if (parameter == "separation_radius") {
         parameters.separation_radius = float_value;
+        sim::sync_spatial_cell_size_to_query_radius(parameters);
         return true;
     }
     if (parameter == "max_speed") {

@@ -144,7 +144,7 @@ The debug overlay separates expected neighbor-query volume from spatial-hash eff
 
 The key metric is **candidates per query**: it counts how many boid entries the spatial hash had to test from visited cells before the boid rules accept effective neighbors. High candidate counts, high maximum cell occupancy, or very dense occupied cells point to a hash or parameter bottleneck even when the effective neighbor count remains modest. In 3D, increasing perception radius expands the visited cell volume rapidly, so large perception radii can multiply checked cells and candidates much faster than they would in a 2D setup.
 
-Use these diagnostics first to distinguish render-bound frames from simulation-bound frames and to tune cell size, boid density, and perception radius. Parallelization should come after these measurements identify the bottleneck, not before.
+Use these diagnostics first to distinguish render-bound frames from simulation-bound frames and to tune cell size, boid density, and perception radius. Scenario defaults, radius sweeps, and runtime radius controls keep `spatial_cell_size` synchronized to the effective query radius (`max(neighbor_radius, separation_radius)`) so a small perception-radius increase does not accidentally expand each 3D query from 27 visited cells to 125. Parallelization should come after these measurements identify the bottleneck, not before.
 
 ## Controls
 
