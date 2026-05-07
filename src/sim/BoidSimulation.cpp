@@ -120,9 +120,16 @@ void BoidSimulation::update_bird_flight(float dt, SimulationMetrics* metrics)
 
 void BoidSimulation::update_fish_school(float dt, SimulationMetrics* metrics)
 {
-    // Placeholder dispatch path for future aquatic drag/current behavior.
-    // Keep shared flocking here until FishSchool gets model-specific forces.
-    update_classic_boids(dt, metrics);
+    update_shared_flocking(
+        dt,
+        metrics,
+        ModelBehavior{
+            true,
+            false,
+            false,
+            true,
+            true,
+        });
 }
 
 void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
@@ -208,6 +215,9 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         if (behavior.add_bird_altitude_acceleration) {
             acceleration = math::add(acceleration, bird_altitude_acceleration(position));
         }
+        if (behavior.add_fish_medium_acceleration) {
+            acceleration = math::add(acceleration, fish_medium_acceleration(position, velocity));
+        }
 
         accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
     }
@@ -215,8 +225,12 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 previous_velocity = velocities_[i];
         Vector3 desired_velocity = math::add(previous_velocity, math::scale(accelerations_[i], dt));
-        if (behavior.apply_bird_velocity_constraints) {
+        if (behavior.apply_bird_velocity_constraints || behavior.apply_fish_velocity_constraints) {
             desired_velocity = limit_turn_rate(previous_velocity, desired_velocity, dt);
+        }
+        if (behavior.apply_fish_velocity_constraints && parameters_.drag_coefficient > 0.0F) {
+            const float drag_factor = std::max(0.0F, 1.0F - parameters_.drag_coefficient * dt);
+            desired_velocity = math::scale(desired_velocity, drag_factor);
         }
         desired_velocity = math::clamp_length(desired_velocity, parameters_.max_speed);
         if (behavior.apply_bird_velocity_constraints) {
@@ -273,6 +287,26 @@ Vector3 BoidSimulation::bird_altitude_acceleration(Vector3 position) const noexc
     } else if (position.y > upper) {
         acceleration.y -= (position.y - upper) * parameters_.altitude_correction_strength;
     }
+    return acceleration;
+}
+
+Vector3 BoidSimulation::fish_medium_acceleration(Vector3 position, Vector3 velocity) const noexcept
+{
+    Vector3 acceleration{0.0F, parameters_.buoyancy_strength, 0.0F};
+
+    const float lower = parameters_.target_depth - parameters_.depth_band;
+    const float upper = parameters_.target_depth + parameters_.depth_band;
+    if (position.y < lower) {
+        acceleration.y += (lower - position.y) * parameters_.depth_correction_strength;
+    } else if (position.y > upper) {
+        acceleration.y -= (position.y - upper) * parameters_.depth_correction_strength;
+    }
+
+    if (parameters_.current_strength > 0.0F && math::length_squared(parameters_.current_direction) > 0.000001F) {
+        const Vector3 current = math::scale(math::normalize_safe(parameters_.current_direction), parameters_.current_strength);
+        acceleration = math::add(acceleration, math::subtract(current, velocity));
+    }
+
     return acceleration;
 }
 
@@ -373,6 +407,7 @@ void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const
     Vector3 normalized_velocity_sum{};
     double speed_total = 0.0;
     double altitude_total = 0.0;
+    double depth_total = 0.0;
     std::size_t stall_count = 0;
     std::size_t near_ground_count = 0;
 
@@ -382,6 +417,7 @@ void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const
         const float speed = math::length(velocities_[i]);
         speed_total += static_cast<double>(speed);
         altitude_total += static_cast<double>(positions_[i].y);
+        depth_total += static_cast<double>(positions_[i].y);
         if (parameters_.min_speed > 0.0F && speed < parameters_.min_speed) {
             ++stall_count;
         }
@@ -394,12 +430,16 @@ void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const
     center = math::scale(center, 1.0F / boid_count);
 
     const double mean_altitude = altitude_total / static_cast<double>(positions_.size());
+    const double mean_depth = depth_total / static_cast<double>(positions_.size());
     double altitude_variance_total = 0.0;
+    double depth_variance_total = 0.0;
     double distance_total = 0.0;
     double distance_squared_total = 0.0;
     for (const Vector3 position : positions_) {
         const double altitude_error = static_cast<double>(position.y) - mean_altitude;
         altitude_variance_total += altitude_error * altitude_error;
+        const double depth_error = static_cast<double>(position.y) - mean_depth;
+        depth_variance_total += depth_error * depth_error;
         const float distance_squared = math::length_squared(math::subtract(position, center));
         const float distance = std::sqrt(distance_squared);
         distance_total += static_cast<double>(distance);
@@ -411,6 +451,9 @@ void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const
     const float dispersion = static_cast<float>(std::sqrt(distance_squared_total / static_cast<double>(positions_.size())));
     const float average_speed = static_cast<float>(speed_total / static_cast<double>(positions_.size()));
     metrics.record_collective_behavior(polarization, cohesion, dispersion, average_speed);
+    metrics.record_fish_metrics(
+        static_cast<float>(mean_depth),
+        static_cast<float>(depth_variance_total / static_cast<double>(positions_.size())));
     metrics.record_flight_metrics(
         static_cast<float>(mean_altitude),
         static_cast<float>(altitude_variance_total / static_cast<double>(positions_.size())),

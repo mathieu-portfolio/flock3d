@@ -50,9 +50,34 @@ namespace {
     return parameters;
 }
 
-[[nodiscard]] constexpr std::array<std::string_view, 5> preset_name_storage() noexcept
+[[nodiscard]] sim::SimulationParameters fish_preset_parameters(
+    float drag_coefficient,
+    float current_strength,
+    float neighbor_radius,
+    float field_of_view_degrees)
 {
-    return {"bird_baseline", "bird_low_lift", "bird_high_gravity", "bird_narrow_fov", "bird_low_turn_rate"};
+    auto parameters = sim::build_scenario(sim::ScenarioType::FishSchool).simulation_parameters;
+    parameters.drag_coefficient = drag_coefficient;
+    parameters.current_strength = current_strength;
+    parameters.neighbor_radius = neighbor_radius;
+    parameters.field_of_view_degrees = field_of_view_degrees;
+    sim::sync_spatial_cell_size_to_query_radius(parameters);
+    return parameters;
+}
+
+[[nodiscard]] constexpr std::array<std::string_view, 9> preset_name_storage() noexcept
+{
+    return {
+        "bird_baseline",
+        "bird_low_lift",
+        "bird_high_gravity",
+        "bird_narrow_fov",
+        "bird_low_turn_rate",
+        "fish_baseline",
+        "fish_high_drag",
+        "fish_strong_current",
+        "fish_low_visibility",
+    };
 }
 
 [[nodiscard]] std::string value_string(double value)
@@ -181,6 +206,34 @@ std::optional<ExperimentPreset> experiment_preset(std::string_view name)
             sim::ScenarioType::BirdFlight,
             bird_preset_parameters(9.8F, 9.8F, 220.0F, 70.0F)};
     }
+    if (name == "fish_baseline") {
+        return ExperimentPreset{
+            "fish_baseline",
+            "FishSchool default resistive-medium baseline",
+            sim::ScenarioType::FishSchool,
+            fish_preset_parameters(0.35F, 0.0F, 5.0F, 360.0F)};
+    }
+    if (name == "fish_high_drag") {
+        return ExperimentPreset{
+            "fish_high_drag",
+            "FishSchool with stronger velocity drag",
+            sim::ScenarioType::FishSchool,
+            fish_preset_parameters(0.75F, 0.0F, 5.0F, 360.0F)};
+    }
+    if (name == "fish_strong_current") {
+        return ExperimentPreset{
+            "fish_strong_current",
+            "FishSchool advected by a stronger constant current",
+            sim::ScenarioType::FishSchool,
+            fish_preset_parameters(0.35F, 3.0F, 5.0F, 360.0F)};
+    }
+    if (name == "fish_low_visibility") {
+        return ExperimentPreset{
+            "fish_low_visibility",
+            "FishSchool with shorter interaction range and restricted field of view",
+            sim::ScenarioType::FishSchool,
+            fish_preset_parameters(0.35F, 0.0F, 2.75F, 180.0F)};
+    }
     return std::nullopt;
 }
 
@@ -307,6 +360,42 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
     }
     if (parameter == "altitude_correction_strength" || parameter == "altitude_correction") {
         parameters.altitude_correction_strength = float_value;
+        return true;
+    }
+    if (parameter == "drag_coefficient" || parameter == "drag") {
+        parameters.drag_coefficient = float_value;
+        return true;
+    }
+    if (parameter == "buoyancy_strength" || parameter == "buoyancy") {
+        parameters.buoyancy_strength = float_value;
+        return true;
+    }
+    if (parameter == "target_depth") {
+        parameters.target_depth = float_value;
+        return true;
+    }
+    if (parameter == "depth_band") {
+        parameters.depth_band = float_value;
+        return true;
+    }
+    if (parameter == "depth_correction_strength" || parameter == "depth_correction") {
+        parameters.depth_correction_strength = float_value;
+        return true;
+    }
+    if (parameter == "current_strength" || parameter == "current") {
+        parameters.current_strength = float_value;
+        return true;
+    }
+    if (parameter == "current_direction_x") {
+        parameters.current_direction.x = float_value;
+        return true;
+    }
+    if (parameter == "current_direction_y") {
+        parameters.current_direction.y = float_value;
+        return true;
+    }
+    if (parameter == "current_direction_z") {
+        parameters.current_direction.z = float_value;
         return true;
     }
     return false;

@@ -36,6 +36,12 @@ enum class TunableParameter : std::uint8_t {
     max_turn_rate,
     field_of_view_degrees,
     altitude_correction_strength,
+    drag_coefficient,
+    buoyancy_strength,
+    target_depth,
+    depth_band,
+    depth_correction_strength,
+    current_strength,
 };
 
 struct TunableParameterDescriptor {
@@ -47,7 +53,7 @@ struct TunableParameterDescriptor {
     float maximum;
 };
 
-inline constexpr std::array<TunableParameterDescriptor, 12> tunable_parameters{{
+inline constexpr std::array<TunableParameterDescriptor, 18> tunable_parameters{{
     {TunableParameter::separation_weight, "separation weight", &sim::SimulationParameters::separation_weight, 0.10F, 0.0F, 10.0F},
     {TunableParameter::alignment_weight, "alignment weight", &sim::SimulationParameters::alignment_weight, 0.10F, 0.0F, 10.0F},
     {TunableParameter::cohesion_weight, "cohesion weight", &sim::SimulationParameters::cohesion_weight, 0.10F, 0.0F, 10.0F},
@@ -60,6 +66,12 @@ inline constexpr std::array<TunableParameterDescriptor, 12> tunable_parameters{{
     {TunableParameter::max_turn_rate, "max turn rate", &sim::SimulationParameters::max_turn_rate, 5.0F, 0.0F, 720.0F},
     {TunableParameter::field_of_view_degrees, "field of view", &sim::SimulationParameters::field_of_view_degrees, 5.0F, 1.0F, 360.0F},
     {TunableParameter::altitude_correction_strength, "altitude correction", &sim::SimulationParameters::altitude_correction_strength, 0.10F, 0.0F, 20.0F},
+    {TunableParameter::drag_coefficient, "drag coefficient", &sim::SimulationParameters::drag_coefficient, 0.05F, 0.0F, 5.0F},
+    {TunableParameter::buoyancy_strength, "buoyancy", &sim::SimulationParameters::buoyancy_strength, 0.05F, -5.0F, 5.0F},
+    {TunableParameter::target_depth, "target depth", &sim::SimulationParameters::target_depth, 0.50F, -120.0F, 120.0F},
+    {TunableParameter::depth_band, "depth band", &sim::SimulationParameters::depth_band, 0.50F, 0.0F, 80.0F},
+    {TunableParameter::depth_correction_strength, "depth correction", &sim::SimulationParameters::depth_correction_strength, 0.10F, 0.0F, 20.0F},
+    {TunableParameter::current_strength, "current strength", &sim::SimulationParameters::current_strength, 0.10F, 0.0F, 20.0F},
 }};
 
 [[nodiscard]] constexpr const TunableParameterDescriptor& descriptor_for(TunableParameter parameter) noexcept

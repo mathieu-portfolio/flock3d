@@ -26,6 +26,8 @@ struct SimulationMetrics {
     float cohesion{};
     float dispersion{};
     float average_speed{};
+    float mean_depth{};
+    float depth_variance{};
     float nearest_neighbor_average_distance{};
     float mean_altitude{};
     float altitude_variance{};
@@ -56,6 +58,8 @@ struct SimulationMetrics {
         cohesion = 0.0F;
         dispersion = 0.0F;
         average_speed = 0.0F;
+        mean_depth = 0.0F;
+        depth_variance = 0.0F;
         nearest_neighbor_average_distance = 0.0F;
         mean_altitude = 0.0F;
         altitude_variance = 0.0F;
@@ -97,6 +101,12 @@ struct SimulationMetrics {
         cohesion = step_cohesion;
         dispersion = step_dispersion;
         average_speed = step_average_speed;
+    }
+
+    constexpr void record_fish_metrics(float step_mean_depth, float step_depth_variance) noexcept
+    {
+        mean_depth = step_mean_depth;
+        depth_variance = step_depth_variance;
     }
 
     constexpr void record_flight_metrics(

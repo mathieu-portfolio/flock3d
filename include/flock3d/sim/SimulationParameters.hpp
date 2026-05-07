@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdint>
 
+#include <raylib.h>
+
 namespace flock3d::sim {
 
 // Add new model behavior by extending BoidSimulation's model dispatch first,
@@ -38,6 +40,13 @@ struct SimulationParameters {
     float max_climb_rate{0.0F};
     float max_turn_rate{0.0F};
     float field_of_view_degrees{360.0F};
+    float drag_coefficient{0.0F};
+    float buoyancy_strength{0.0F};
+    float target_depth{0.0F};
+    float depth_band{0.0F};
+    float depth_correction_strength{0.0F};
+    float current_strength{0.0F};
+    Vector3 current_direction{1.0F, 0.0F, 0.0F};
 };
 
 [[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept

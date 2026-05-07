@@ -310,6 +310,14 @@ void Application::refresh_overlay_text(float frame_time_ms)
             static_cast<double>(metrics_.mean_altitude),
             static_cast<double>(metrics_.altitude_variance),
             metrics_.stall_count);
+    } else if (active_scenario_.type == sim::ScenarioType::FishSchool) {
+        write_literal(overlay_lines_[line++], "FishSchool medium");
+        write_line(
+            overlay_lines_[line++],
+            "Depth mean %.2f var %.2f speed %.2f",
+            static_cast<double>(metrics_.mean_depth),
+            static_cast<double>(metrics_.depth_variance),
+            static_cast<double>(metrics_.average_speed));
     } else {
         line += 2;
     }
