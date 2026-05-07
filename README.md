@@ -1,26 +1,55 @@
 # flock3d
 
-Real-time 3D collective-behavior simulation in modern C++20.
+**A real-time C++20 flocking simulator and deterministic experimentation platform for 3D collective behavior.**
 
-`flock3d` is a portfolio-scale scientific graphics project: it renders hundreds to thousands of agents with raylib, advances them with a deterministic fixed-timestep simulation, and exports macroscopic flock metrics for repeatable experiments. The project starts from classic Reynolds boids, then layers scenario-specific constraints for flight, schooling, and noise-robustness studies without turning the simulator into a collection of ad-hoc flags.
+`flock3d` combines an interactive raylib renderer with a headless experiment runner, sampled CSV exports, and lightweight plotting scripts. It is built as both a polished systems-programming portfolio project and a small scientific sandbox for studying how local rules produce group-level motion.
+
+## Visual overview
+
+Visual assets are curated from `resources/` for interactive screenshots/GIFs and from `results/<study_name>/` for generated scientific plots. This checkout does not currently contain pushed image files in either location, so the README avoids hardcoding broken image links.
+
+<p align="center">
+  <em>Add screenshots to `resources/` and study plots to `results/<study_name>/`, then link the selected files here as the hero image and comparison gallery.</em>
+</p>
 
 ## Why it is interesting
 
-- **Visual**: velocity-oriented tetrahedron boids move through a wrapped 3D world with a free camera and compact metrics overlay.
-- **Scientific**: scenarios expose reproducible seeds, controlled parameters, sampled CSV metrics, and deterministic headless runs.
-- **Engineering**: the codebase keeps simulation, rendering, application, and experiment-runner concerns separated behind small CMake targets.
+- **Simulation craft**: classic Reynolds-style boids are extended into bird-flight, fish-schooling, and noise-robustness scenarios without turning the model into a pile of ad-hoc switches.
+- **Systems engineering**: rendering, simulation, scenario dispatch, experiment running, and plotting are separated into small CMake targets and scripts.
+- **Scientific workflow**: deterministic seeds, fixed-timestep stepping, sampled metrics, one-parameter sweeps, and repeatable plots make visual behavior measurable.
 
 ## Key features
 
-- Modern **C++20** with CMake presets and FetchContent-based dependencies.
-- **raylib** interactive renderer with free camera controls and a toggleable debug overlay.
-- Deterministic **120 Hz fixed timestep** simulation loop.
-- Structure-of-arrays boid storage for positions, velocities, and accelerations.
-- Uniform 3D spatial hash for allocation-light neighbor queries.
-- Scenario definitions for **Classic Boids**, **Bird Flight**, **Fish School**, **Noise Experiment**, and future scenario placeholders.
-- Reproducible seed handling for resets, scenario changes, CSV recordings, and headless experiments.
-- Sampled CSV metrics export and a deterministic `flock3d_experiment_runner` for scripted runs and one-parameter sweeps.
-- Catch2 coverage for core simulation behavior.
+- Interactive **raylib** renderer with camera controls, scenario switching, live parameter tuning, and a compact metrics overlay.
+- Deterministic **120 Hz fixed-timestep** simulation path shared by the app and headless runner.
+- Structure-of-arrays boid state and a uniform 3D spatial hash for efficient neighbor queries.
+- Implemented scenarios for **ClassicBoids**, **BirdFlight**, **FishSchool**, and **NoiseExperiment**.
+- Sampled CSV export, summary export, curated study scripts, and Python plotting utilities.
+- Catch2 tests for core simulation, experiment, controls, and spatial-hash behavior.
+
+## Visual gallery
+
+The gallery should link only files that exist in the repository. Use filename cues to choose representative assets:
+
+| Role | Source | Filename cues |
+| --- | --- | --- |
+| Hero screenshot/GIF | `resources/` | `bird`, `fish`, `boid`, `overlay` |
+| Scenario comparison | `resources/` | `bird`, `fish`, `noise`, `overlay` |
+| Quantitative plot | `results/<study_name>/` | `plot`, `polarization`, `cohesion`, `altitude` |
+
+Keep checked-in images small enough for GitHub to render quickly. Use generated plots for quantitative results and screenshots/GIFs for first-contact visual impact.
+
+## Example results
+
+Curated study scripts generate compact CSV summaries and publication-style PNG plots. Once plots are pushed under `results/<study_name>/`, select the clearest examples for README display:
+
+| Study | What to show | Good filename cues |
+| --- | --- | --- |
+| Noise robustness | steering noise vs polarization/order loss | `noise`, `polarization`, `order_loss`, `plot` |
+| Bird flight | field of view or turn rate vs altitude/order | `bird`, `altitude`, `polarization`, `plot` |
+| Fish school | drag vs cohesion/speed/depth stability | `fish`, `drag`, `cohesion`, `depth`, `plot` |
+
+The current scripts write reproducible artifacts under `outputs/<study_name>/`; see [docs/experiments.md](docs/experiments.md) for the full workflow and commands.
 
 ## Quick start
 
@@ -39,117 +68,62 @@ Real-time 3D collective-behavior simulation in modern C++20.
 ./scripts/run.sh
 ```
 
-Use a different preset by passing it to the helper scripts or setting `CMAKE_PRESET`:
+Use `CMAKE_PRESET=release` or pass a preset to the helper scripts when you want a non-default build.
 
-```bash
-./scripts/build.sh release
-CMAKE_PRESET=debug-vs2022 ./scripts/tests.sh
-./scripts/run.sh release --
-```
+## Scenario overview
 
-On Windows, the default debug executable is typically:
+| Scenario | Focus | Representative visual |
+| --- | --- | --- |
+| **ClassicBoids** | Baseline separation, alignment, and cohesion in a wrapped 3D world. | Use a broad flock screenshot or overlay capture. |
+| **BirdFlight** | Flight-like constraints: gravity, lift, altitude hold, turn rate, and field of view. | Use `bird` screenshots or `altitude`/`polarization` plots. |
+| **FishSchool** | Resistive-medium schooling with drag, buoyancy, depth keeping, and optional current. | Use `fish`, `drag`, `cohesion`, or `depth` plots. |
+| **NoiseExperiment** | Deterministic sensing/steering/velocity perturbations for robustness studies. | Use `noise`, `polarization`, or `order_loss` plots. |
 
-```powershell
-.\build\debug\Debug\flock3d.exe
-```
-
-## Generate example studies
-
-Curated recipe scripts build the headless experiment runner, run deterministic one-parameter sweeps, export compact summary CSVs and render several scenario-relevant PNG plots in dedicated folders under `outputs/`. Install the plotting dependencies first if they are not already available:
-
-```bash
-python -m pip install pandas matplotlib
-```
-
-Run any study from the repository root:
-
-```bash
-./scripts/run_noise_study.sh
-./scripts/run_birdflight_study.sh
-./scripts/run_fishschool_study.sh
-```
-
-Expected artifacts:
-
-| Script | CSV output | Plot outputs | Interpretation |
-| --- | --- | --- | --- |
-| `scripts/run_noise_study.sh` | `outputs/noise/noise_steering_sweep.csv` | `outputs/noise/noise_strength_vs_polarization.png`<br>`outputs/noise/noise_strength_vs_order_loss.png`<br>`outputs/noise/noise_strength_vs_dispersion.png`<br>`outputs/noise/noise_strength_vs_cohesion.png` | Sweeps `steering_noise_strength` from low to high; polarization and order loss quantify degradation of collective order, while dispersion and cohesion show spatial spreading and loss of grouping. |
-| `scripts/run_birdflight_study.sh` | `outputs/birdflight/birdflight_fov_sweep.csv`<br>`outputs/birdflight/birdflight_turn_rate_sweep.csv` | `outputs/birdflight/fov_vs_polarization.png`<br>`outputs/birdflight/fov_vs_dispersion.png`<br>`outputs/birdflight/fov_vs_average_neighbors.png`<br>`outputs/birdflight/fov_vs_stall_count.png`<br>`outputs/birdflight/turn_rate_vs_polarization.png`<br>`outputs/birdflight/turn_rate_vs_dispersion.png`<br>`outputs/birdflight/turn_rate_vs_cohesion.png`<br>`outputs/birdflight/turn_rate_vs_altitude_variance.png` | Sweeps `field_of_view_degrees` and `max_turn_rate`; BirdFlight now focuses on collective order under perception and maneuverability constraints rather than making gravity the primary study. |
-| `scripts/run_fishschool_study.sh` | `outputs/fishschool/fishschool_drag_sweep.csv` | `outputs/fishschool/drag_vs_polarization.png`<br>`outputs/fishschool/drag_vs_cohesion.png`<br>`outputs/fishschool/drag_vs_average_speed.png`<br>`outputs/fishschool/drag_vs_depth_variance.png` | Sweeps `drag_coefficient`; polarization, cohesion, average speed, and depth variance show how resistive damping affects school alignment, grouping, motion, and depth keeping. |
-
-Set `CMAKE_PRESET` before invoking a script to use a non-default CMake preset, for example `CMAKE_PRESET=release ./scripts/run_noise_study.sh`.
-
-## Screenshots and plots
-
-Visual artifacts are intentionally kept as placeholders until the capture set is curated:
-
-- `docs/assets/classic-boids.png` — ClassicBoids interactive renderer screenshot.
-- `docs/assets/bird-altitude.png` — BirdFlight altitude-stability plot.
-- `docs/assets/fish-drag-sweep.png` — FishSchool drag-vs-cohesion sweep.
-- `docs/assets/noise-polarization.png` — NoiseExperiment order-loss sweep.
+Future placeholders reserve space for predator-prey, obstacle-avoidance, and leadership experiments while the current implemented scenarios remain the main research surface. Detailed model notes live in [docs/scenarios.md](docs/scenarios.md).
 
 ## Architecture summary
 
 ```text
-include/flock3d/
-  math/        Lightweight Vector3 helpers.
-  sim/         Public simulation and scenario headers.
-src/
-  app/         Window ownership, camera setup, input, and fixed-timestep loop.
-  sim/         Core boid simulation, scenario definitions, metrics, spatial hash.
-  render/      raylib drawing and overlay rendering.
-  experiment/  CSV export and deterministic headless experiment runner.
-tests/         Catch2 simulation tests.
-scripts/       Build/run/test helpers and CSV plotting utilities.
-docs/          Scenario and experiment reference material.
+include/flock3d/  Public math and simulation headers
+src/app/          Window, camera, controls, and fixed-timestep loop
+src/sim/          Boid model, scenario definitions, metrics, spatial hash
+src/render/       raylib boid drawing and overlay rendering
+src/experiment/   Deterministic headless runner and CSV export
+tests/            Catch2 regression coverage
+scripts/          Build, test, run, study, and plotting helpers
 ```
 
-The simulation stores boid state in separate vectors for positions, velocities, and accelerations. Rendering consumes simulation state but does not own update logic, and the headless experiment runner reuses the same scenario and simulation code without opening a window.
+The interactive app and experiment runner reuse the same simulation and scenario code. That keeps the project visually engaging for exploration while preserving a deterministic path for repeatable analysis.
 
-## Scenario overview
+## Experiment workflow
 
-| Scenario | Status | Focus |
-| --- | --- | --- |
-| Classic Boids | Implemented | Baseline separation, alignment, and cohesion in a wrapped 3D world. |
-| Bird Flight | Implemented | Gravity, lift, altitude hold, minimum speed, climb-rate, turn-rate, and field-of-view constraints. |
-| Fish School | Implemented | Resistive-medium schooling with drag, buoyancy, target depth, smooth turning, and optional current. |
-| Noise Experiment | Implemented | Deterministic perception, steering, and velocity perturbations for collective-order robustness studies. |
-| Predator-Prey | Placeholder | Future pursuit/evasion roles and predator/prey metrics. |
-| Obstacle Avoidance | Placeholder | Future obstacle fields and avoidance-response experiments. |
-| Leadership | Placeholder | Future informed-leader and information-propagation experiments. |
+```text
+simulate → export CSV → analyze → generate plots
+```
 
-See [docs/scenarios.md](docs/scenarios.md) for scenario purposes, parameters, metrics, and suggested experiments.
+Two common entry points:
 
-## Common controls
+```bash
+./scripts/run_noise_study.sh
+python scripts/plot_metric.py --input outputs/run.csv --x simulation_time --y polarization --output outputs/polarization.png
+```
 
-- `W/A/S/D` + mouse: free camera.
-- `P`: pause or resume simulation updates.
-- `R`: reset with the current seed.
-- `N`: randomize seed and reset.
-- `,` / `.`: switch scenario.
-- `F1`: toggle the debug and metrics overlay.
-- `+` / `-`: adjust boid count in batches.
-- `Tab` / `Shift+Tab`: cycle the selected tunable parameter.
-- `Left` / `Right` or `[` / `]`: adjust the selected parameter.
-- `O`: start or stop CSV metrics recording.
-- `M`: cycle export mode while recording is stopped.
-- `Esc`: close the window.
+For presets, sweeps, export modes, and plotting details, see [docs/experiments.md](docs/experiments.md).
 
-## Detailed documentation
+## Documentation
 
-- [docs/scenarios.md](docs/scenarios.md): scenario reference, model parameters, scenario metrics, and suggested scientific questions.
-- [docs/experiments.md](docs/experiments.md): CSV export modes, runner usage, presets, sweeps, and plotting scripts.
+- [docs/scenarios.md](docs/scenarios.md): scenario purpose, parameters, metrics, and suggested scientific questions.
+- [docs/experiments.md](docs/experiments.md): runner usage, CSV export modes, presets, sweeps, study scripts, and plotting workflow.
+- [docs/architecture.md](docs/architecture.md): code organization, model dispatch, spatial hash, and deterministic stepping notes.
 
-## Current status
+## Current status and roadmap
 
-`flock3d` is a working real-time sandbox plus deterministic experiment harness. ClassicBoids, BirdFlight, FishSchool, and NoiseExperiment have distinct simulation paths and exported metrics. PredatorPrey, ObstacleAvoidance, and Leadership currently reserve scenario names, seeds, and descriptions while reusing classic boid steering until their models are implemented.
+`flock3d` is a working real-time simulator plus deterministic experiment harness. ClassicBoids, BirdFlight, FishSchool, and NoiseExperiment have distinct simulation paths and exported metrics; the next polish pass is primarily about curating checked-in visuals.
 
-## Roadmap
+Planned work:
 
-- Implement predator/prey, obstacle-avoidance, and leadership models.
-- Add deterministic scenario fixtures for simulation regression tests.
-- Define cluster-connectivity metrics for scenario-specific analysis.
-- Add compact full-trajectory export once the schema is settled.
-- Expand spatial-hash benchmarks and reusable neighbor buffers.
-- Explore instanced rendering for larger flocks.
-- Curate screenshots and reproducible plot artifacts for the portfolio README.
+- Curate screenshots/GIFs under `resources/` and representative plots under `results/<study_name>/`.
+- Implement predator-prey, obstacle-avoidance, and leadership models.
+- Add deterministic scenario fixtures for regression testing.
+- Define cluster-connectivity metrics for richer scenario analysis.
+- Explore compact full-trajectory export and instanced rendering for larger flocks.
