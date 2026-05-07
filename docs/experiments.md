@@ -1,36 +1,28 @@
-# Metrics and experiments
+# Experiments and CSV analysis
 
-`flock3d` exports sampled macroscopic metrics and provides a headless experiment runner for deterministic scripted comparisons. This document keeps experiment-specific reference material out of the top-level project README.
+`flock3d` exports sampled macroscopic metrics and provides a deterministic headless experiment runner for scripted comparisons. This document focuses on experiment mechanics: export modes, CSV philosophy, runner usage, presets, sweeps, and plotting scripts. Scenario model details and scenario-specific metrics live in [scenarios.md](scenarios.md).
 
-## Sampled CSV export
+## CSV philosophy
 
-`flock3d` exports **sampled macroscopic metrics** rather than per-frame state dumps by default. The simulation can advance at a fixed timestep such as 120 Hz while metrics are sampled at an independent rate such as 5 Hz. For example, with `fixed_dt = 1/120` and `sample_rate_hz = 5`, one CSV row is emitted every 0.2 seconds of simulation time.
+The project records **sampled aggregate metrics**, not per-frame agent dumps. A simulation can advance at a fixed timestep such as 120 Hz while metrics are sampled independently, for example at 5 Hz. With `fixed_dt = 1/120` and `sample_rate_hz = 5`, one CSV row is emitted every 0.2 seconds of simulation time.
 
-This keeps experiment files compact, emphasizes collective-behavior observables, and avoids tying scientific data volume to rendering framerate.
+This keeps files compact, makes interactive and headless runs comparable, and emphasizes scientific observables such as order, cohesion, dispersion, depth, altitude, and timing instead of raw trajectory volume.
 
-CSV files are written under `outputs/` by the interactive app using timestamped filenames. The overlay shows whether recording is active, the selected export mode, the sample rate, and the current output filename.
+Interactive CSV files are written under `outputs/` using timestamped filenames. The overlay shows whether recording is active, the selected export mode, the sample rate, and the current output filename.
 
-Supported export modes:
+## Export modes
 
-- **SampledTimeSeries** (default): writes one row per sample containing scenario, seed, timestamp, git commit when available, sample rate, sample index, simulation time, boid count, polarization, cohesion, dispersion, average speed, average neighbors, nearest-neighbor distance, simulation update time, neighbor queries, spatial hash cell count, mean altitude, altitude variance, stall count, near-ground count, noise strength, order loss, and optional sweep metadata.
-- **Summary**: samples at the same independent cadence but writes one aggregate row at the end of recording or at the end of a headless run. The aggregate records mean polarization, mean cohesion, max dispersion, mean speed, mean neighbors, mean flight/noise metrics, and total duration in the shared CSV schema; `SummaryAggregator` also retains max polarization for code-level consumers.
-- **FullTrajectory**: declared as a placeholder for future full state export and intentionally not implemented yet.
+- **SampledTimeSeries** (`sampled`): default mode. Writes one aggregate row per sample.
+- **Summary** (`summary`): samples internally at the same cadence, then writes one aggregate row at the end of recording or at the end of a headless run.
+- **FullTrajectory**: reserved for a future compact trajectory schema and intentionally not implemented yet.
 
-## BirdFlight stability metrics
-
-BirdFlight experiments intentionally use a compact stability metric set so runs are easy to compare:
-
-- `mean_altitude`: the average `y` position of all birds in the sampled simulation step. Higher or lower values show whether the flock is holding its target altitude band.
-- `altitude_variance`: the variance of bird altitude around `mean_altitude` in the sampled step. Lower values indicate a tighter, more level flock.
-- `stall_count`: the number of birds whose speed is below the BirdFlight `min_speed` threshold in the sampled step. Larger values indicate more birds are losing stable forward flight.
-
-These metrics are deterministic for a fixed seed, timestep, preset, and override set. They are written to sampled CSV exports and summary CSV exports alongside the existing collective metrics.
+The shared CSV schema contains run metadata, timing fields, collective-order metrics, spatial-hash diagnostics, optional scenario-specific metrics, and optional sweep metadata. See [scenarios.md](scenarios.md) for the meaning of scenario-specific columns such as altitude, depth, and order-loss metrics.
 
 ## Headless experiment runner
 
-The `flock3d_experiment_runner` executable reuses the scenario and simulation code without creating a raylib window. Runs are deterministic for the same scenario, seed, boid count, fixed timestep, duration, sample rate, export mode, preset, and swept parameter value.
+The `flock3d_experiment_runner` executable reuses the same scenario and simulation code as the interactive app without creating a raylib window. Runs are deterministic for the same scenario, seed, boid count, fixed timestep, duration, sample rate, export mode, preset, and swept parameter value.
 
-Example sampled time-series run:
+Sampled time-series example:
 
 ```bash
 ./build/local/bin/flock3d_experiment_runner \
@@ -44,7 +36,7 @@ Example sampled time-series run:
   --output outputs/classic_seed123.csv
 ```
 
-Example summary run:
+Summary example:
 
 ```bash
 ./build/local/bin/flock3d_experiment_runner \
@@ -58,9 +50,31 @@ Example summary run:
   --output outputs/classic_seed123_summary.csv
 ```
 
+## Presets
+
+Presets apply scenario defaults and a curated parameter set before explicit CLI overrides. Options such as `--seed`, `--boids`, `--duration`, `--sample-rate`, `--export-mode`, `--output`, and `--sweep` are applied after the preset.
+
+Available presets:
+
+- BirdFlight: `bird_baseline`, `bird_low_lift`, `bird_high_gravity`, `bird_narrow_fov`, `bird_low_turn_rate`.
+- FishSchool: `fish_baseline`, `fish_high_drag`, `fish_strong_current`, `fish_low_visibility`.
+- NoiseExperiment: `noise_baseline`, `noise_low`, `noise_medium`, `noise_high`.
+
+Preset example:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --preset bird_baseline \
+  --duration 30 \
+  --sample-rate 5 \
+  --output outputs/bird_baseline.csv
+```
+
 ## One-parameter sweeps
 
 One-parameter sweeps use inclusive `start:end:step` ranges. Only one `--sweep` argument is supported for now, and each output row includes `sweep_parameter` and `sweep_value` metadata.
+
+ClassicBoids perception-radius sweep:
 
 ```bash
 ./build/local/bin/flock3d_experiment_runner \
@@ -73,31 +87,25 @@ One-parameter sweeps use inclusive `start:end:step` ranges. Only one `--sweep` a
   --export-mode sampled \
   --sweep perception_radius=5:30:5 \
   --output outputs/perception_radius_sweep.csv
-
-./build/local/bin/flock3d_experiment_runner \
-  --scenario ClassicBoids \
-  --seed 123 \
-  --boids 1024 \
-  --duration 20 \
-  --fixed-dt 0.008333 \
-  --sample-rate 5 \
-  --export-mode sampled \
-  --sweep alignment_weight=0:3:0.5 \
-  --output outputs/alignment_weight_sweep.csv
 ```
 
-BirdFlight sweeps support at least `gravity`, `lift_strength`, `max_turn_rate`, `field_of_view_degrees`, and `altitude_correction_strength`. NoiseExperiment sweeps support `perception_noise_strength` and `steering_noise_strength`, with `velocity_noise_strength`, `noise_seed_offset`, and `noise_enabled` available for targeted overrides.
+BirdFlight, FishSchool, and NoiseExperiment expose additional sweep parameters documented by scenario in [scenarios.md](scenarios.md). Useful starting points are:
 
+- BirdFlight: `gravity`, `lift_strength`, `max_turn_rate`, `field_of_view_degrees`, `altitude_correction_strength`.
+- FishSchool: `drag_coefficient`, `depth_correction_strength`, `target_depth`, `current_strength`.
+- NoiseExperiment: `perception_noise_strength`, `steering_noise_strength`, with `velocity_noise_strength`, `noise_seed_offset`, and `noise_enabled` for targeted overrides.
 
-## Python CSV analysis tools
+## Plotting scripts
 
-The repository includes small Python scripts for the final analysis step from simulation to CSV to plot. They intentionally keep plotting outside the C++ app and avoid notebooks, GUI code, seaborn, Parquet/HDF5, and complex statistics. Install the required Python packages with:
+The repository includes small Python scripts for the final analysis step from simulation to CSV to plot. They intentionally keep plotting outside the C++ app and avoid notebooks, GUI code, seaborn, Parquet/HDF5, and complex statistics.
+
+Install plotting dependencies:
 
 ```bash
 python3 -m pip install pandas matplotlib
 ```
 
-Use `plot_metric.py` for a direct metric-over-time or metric-vs-metric plot from any sampled CSV export:
+Plot any sampled metric against another CSV column:
 
 ```bash
 python3 scripts/plot_metric.py \
@@ -107,7 +115,7 @@ python3 scripts/plot_metric.py \
   --output outputs/polarization.png
 ```
 
-Use `compare_sweeps.py` for one-parameter sweep CSVs. It groups rows by the selected sweep column, computes the mean of the metric for each value, and plots the sweep value against that mean:
+Compare one-parameter sweep exports by grouping rows by a sweep column and plotting each value against the mean metric:
 
 ```bash
 python3 scripts/compare_sweeps.py \
@@ -117,125 +125,12 @@ python3 scripts/compare_sweeps.py \
   --output outputs/noise_vs_polarization.png
 ```
 
-Both scripts check that requested columns exist and exit with an error listing the available columns when a CSV schema or CLI argument does not match. Useful starter comparisons include:
+Both scripts check that requested columns exist and exit with an error listing the available columns when a CSV schema or CLI argument does not match.
 
-- Noise strength vs. polarization: sweep `steering_noise_strength` or `perception_noise_strength`, then plot mean `polarization`.
-- Gravity vs. altitude variance: sweep BirdFlight `gravity`, then plot mean `altitude_variance`.
-- Drag vs. cohesion: sweep FishSchool `drag_coefficient`, then plot mean `cohesion`.
+## Suggested analysis workflow
 
-## BirdFlight presets
-
-The experiment runner supports `--preset <name>`. Presets apply defaults first, then explicit CLI options such as `--seed`, `--boids`, `--duration`, `--sample-rate`, `--export-mode`, `--output`, and `--sweep` are applied after the preset.
-
-Available presets:
-
-- `bird_baseline`: default BirdFlight stability baseline.
-- `bird_low_lift`: reduced lift strength while leaving the baseline gravity and visibility model intact.
-- `bird_high_gravity`: stronger gravity with baseline lift, field of view, and turn rate.
-- `bird_narrow_fov`: narrower forward field of view for neighbor perception.
-- `bird_low_turn_rate`: reduced maximum turn rate for slower heading correction.
-
-Run a short sampled baseline export:
-
-```bash
-./build/local/bin/flock3d_experiment_runner \
-  --preset bird_baseline \
-  --duration 30 \
-  --sample-rate 5 \
-  --output outputs/bird_baseline.csv
-```
-
-Compare low lift with a summary export:
-
-```bash
-./build/local/bin/flock3d_experiment_runner \
-  --preset bird_low_lift \
-  --duration 60 \
-  --export-mode summary \
-  --output outputs/bird_low_lift_summary.csv
-```
-
-Sweep gravity after applying the high-gravity preset defaults:
-
-```bash
-./build/local/bin/flock3d_experiment_runner \
-  --preset bird_high_gravity \
-  --sweep gravity=8:14:1 \
-  --duration 45 \
-  --output outputs/bird_gravity_sweep.csv
-```
-
-Override run size and seed while keeping the narrow-FOV preset parameters:
-
-```bash
-./build/local/bin/flock3d_experiment_runner \
-  --preset bird_narrow_fov \
-  --seed 2401 \
-  --boids 1024 \
-  --duration 30 \
-  --output outputs/bird_narrow_fov_seed2401.csv
-```
-
-## NoiseExperiment order robustness
-
-NoiseExperiment studies how noisy local information and actuator response degrade collective order. It reuses the shared ClassicBoids separation/alignment/cohesion update, then applies deterministic perturbations controlled by the simulation seed and `noise_seed_offset`:
-
-- `perception_noise_strength` perturbs perceived neighbor offsets and alignment directions before the flocking sums are evaluated.
-- `steering_noise_strength` perturbs each boid's final steering acceleration before force clamping.
-- `velocity_noise_strength` optionally perturbs velocity after integration, followed by the usual speed clamp.
-- `noise_enabled` can disable the perturbation path; with all strengths at zero, matched ClassicBoids parameters produce the same trajectory.
-
-The core macroscopic metrics remain the main observables: `polarization`, `dispersion`, `cohesion`, and `average_neighbors`. CSV exports also include `noise_strength` and `order_loss`, where `order_loss = 1 - polarization`, so summary sweeps can directly compare noise strength vs. polarization.
-
-Presets are `noise_baseline`, `noise_low`, `noise_medium`, and `noise_high`. A suggested experiment is a one-parameter summary sweep of noise strength against polarization:
-
-```bash
-./build/local/bin/flock3d_experiment_runner \
-  --preset noise_baseline \
-  --seed 7901 \
-  --boids 1024 \
-  --duration 45 \
-  --fixed-dt 0.008333 \
-  --sample-rate 5 \
-  --export-mode summary \
-  --sweep steering_noise_strength=0:0.5:0.05 \
-  --output outputs/noise_steering_vs_polarization.csv
-```
-
-Repeat the same command with `--sweep perception_noise_strength=0:0.5:0.05` to compare perception noise against steering noise while keeping the initial seed and timestep fixed.
-
-## FishSchool experiments
-
-FishSchool uses the same separation/alignment/cohesion observables as ClassicBoids, with additional resistive-medium parameters for underwater-style motion:
-
-- `drag_coefficient` dampens velocity every simulation step.
-- `buoyancy_strength` adds positive-`y` acceleration.
-- `target_depth`, `depth_band`, and `depth_correction_strength` keep the school near a preferred depth band.
-- `current_strength` and `current_direction` add an optional constant current influence.
-- `max_turn_rate` limits heading changes for smoother turns.
-
-FishSchool exports include `mean_depth`, `depth_variance`, and `average_speed` alongside polarization, cohesion, dispersion, neighbor, and timing metrics. Presets are `fish_baseline`, `fish_high_drag`, `fish_strong_current`, and `fish_low_visibility`; CLI values and sweeps still apply after preset defaults.
-
-Example commands:
-
-```bash
-./build/local/bin/flock3d_experiment_runner \
-  --preset fish_baseline \
-  --duration 30 \
-  --sample-rate 5 \
-  --output outputs/fish_baseline.csv
-
-./build/local/bin/flock3d_experiment_runner \
-  --preset fish_baseline \
-  --sweep drag_coefficient=0.1:0.9:0.2 \
-  --duration 45 \
-  --export-mode summary \
-  --output outputs/fish_drag_sweep.csv
-
-./build/local/bin/flock3d_experiment_runner \
-  --preset fish_strong_current \
-  --sweep current_strength=0:4:1 \
-  --seed 3109 \
-  --boids 1024 \
-  --output outputs/fish_current_sweep.csv
-```
+1. Choose a scenario question from [scenarios.md](scenarios.md).
+2. Run a short sampled export to inspect metric behavior over time.
+3. Switch to `--export-mode summary` for parameter sweeps.
+4. Plot the sweep with `scripts/compare_sweeps.py`.
+5. Keep the seed, timestep, boid count, sample rate, and duration fixed when comparing only one parameter.
