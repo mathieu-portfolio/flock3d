@@ -1,6 +1,6 @@
 # flock3d
 
-`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, quantitative flock metrics, the physically constrained Bird Flight scenario, and Fish School resistive-medium flocking so future predator/prey, obstacle, leadership, and noise models can be isolated as scenarios instead of ad-hoc flags.
+`flock3d` is a modern C++20 real-time 3D collective-behavior simulation focused on clean architecture, deterministic simulation, spatial partitioning, and performance-oriented design. The v2 foundation keeps the classic 3D boids model intact while adding scientific scenario definitions, reproducible seeds, quantitative flock metrics, the physically constrained Bird Flight scenario, Fish School resistive-medium flocking, and a deterministic Noise Experiment for collective-order robustness so future predator/prey, obstacle, and leadership models can be isolated as scenarios instead of ad-hoc flags.
 
 ## Features
 
@@ -11,10 +11,10 @@
 - **Deterministic fixed timestep** simulation loop at 120 Hz.
 - **Simulation/rendering separation** so flock behavior can evolve without coupling to drawing code.
 - **Data-oriented SoA storage** for boid positions, velocities, and accelerations.
-- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, boid count, and Bird Flight constraint sweeps such as gravity, turn rate, field of view, and altitude correction, plus Fish School sweeps such as drag, depth correction, target depth, and current strength.
+- **Runtime-tunable flock parameters** for separation, alignment, cohesion, perception radius, max speed, boid count, and Bird Flight constraint sweeps such as gravity, turn rate, field of view, and altitude correction, plus Fish School sweeps such as drag, depth correction, target depth, and current strength, and Noise Experiment sweeps such as perception and steering noise.
 - **Scenario definitions** with display text, default simulation parameters, environment settings, constraints, behavior settings, metric settings, and deterministic seeds.
 - **Reproducible seed handling** so resetting a scenario with the same seed recreates the same initial boid positions and velocities.
-- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, collective-behavior order parameters, and Bird Flight altitude/stall observables, plus Fish School depth/speed observables.
+- **Lightweight metrics instrumentation** for simulation step time, render time, spatial hash occupancy, neighbor-query behavior, collective-behavior order parameters, and Bird Flight altitude/stall observables, plus Fish School depth/speed observables and Noise Experiment order-loss observables.
 - **Sampled CSV metrics export** for reproducible experiments without per-frame dumps.
 - **Headless experiment runner** (`flock3d_experiment_runner`) for deterministic scripted runs and one-parameter sweeps without opening a raylib window.
 - **Configurable directional boid scale** via simulation parameters.
@@ -97,7 +97,7 @@ This keeps the initial implementation simple while preserving a path toward cach
 
 ## v2 scientific scenarios
 
-The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. **Classic Boids** is the unconstrained baseline. **Bird Flight** adds scenario-specific perception and flight limits. **Fish School** reuses the shared separation/alignment/cohesion rules inside a resistive underwater-style medium with drag, depth preference, smooth turning, and optional current. The remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
+The scenario system is deliberately plain-data oriented. `ScenarioType` selects a `ScenarioDefinition`, and the factory applies scenario defaults to `BoidSimulation`. **Classic Boids** is the unconstrained baseline. **Bird Flight** adds scenario-specific perception and flight limits. **Fish School** reuses the shared separation/alignment/cohesion rules inside a resistive underwater-style medium with drag, depth preference, smooth turning, and optional current. **Noise Experiment** also reuses the shared flocking rules, then adds deterministic perception, steering, and velocity perturbations so controlled noise sweeps can quantify how collective order degrades. The remaining scenarios expose distinct names, descriptions, parameters, and seeds while reusing classic boid steering until their models are implemented.
 
 Current scenarios:
 
@@ -107,7 +107,7 @@ Current scenarios:
 - **Predator-Prey**: placeholder for future predator/prey roles and pursuit/evasion.
 - **Obstacle Avoidance**: placeholder for future obstacle fields and avoidance responses.
 - **Leadership**: placeholder for future informed-leader experiments.
-- **Noise Experiment**: placeholder for future controlled noise sweeps.
+- **Noise Experiment**: collective-order robustness study with deterministic noisy perception, steering acceleration, and optional post-integration velocity perturbations.
 
 Each scenario stores its default seed. Switching scenarios applies its default parameters and resets the simulation from that scenario seed. Pressing reset recreates the current scenario state with the current seed; pressing the randomize-seed control assigns a new seed and resets immediately.
 
@@ -126,6 +126,31 @@ Bird Flight is intentionally simple rather than aerodynamically realistic. It is
 - `field_of_view_degrees`: forward cone used to ignore neighbors behind or outside the bird's perception.
 
 The same model runs in the interactive viewer, CSV recorder, headless runner, and one-parameter sweep path.
+
+### Noise Experiment robustness
+
+Noise Experiment is meant to answer: how much noisy perception or steering can a flock tolerate before macroscopic order breaks down? It keeps Classic Boids separation, alignment, and cohesion as the baseline, then applies deterministic noise controlled by these `SimulationParameters`:
+
+- `perception_noise_strength`: perturbs perceived neighbor offsets and alignment directions before separation/alignment/cohesion are computed.
+- `steering_noise_strength`: perturbs the final steering acceleration before the force clamp.
+- `velocity_noise_strength`: optionally perturbs velocity after integration, then clamps to `max_speed`.
+- `noise_seed_offset`: separates the deterministic noise stream from the initial-state seed.
+- `noise_enabled`: toggles the perturbation path; zero strengths reproduce Classic Boids behavior for matched classic parameters.
+
+Use the built-in collective metrics (`polarization`, `dispersion`, `cohesion`, and `average_neighbors`) plus `noise_strength` and `order_loss = 1 - polarization` to study noise strength vs. polarization. A typical run sweeps `perception_noise_strength` or `steering_noise_strength` and exports summary rows for each value:
+
+```bash
+./build/local/bin/flock3d_experiment_runner \
+  --preset noise_baseline \
+  --seed 7901 \
+  --boids 1024 \
+  --duration 45 \
+  --fixed-dt 0.008333 \
+  --sample-rate 5 \
+  --export-mode summary \
+  --sweep perception_noise_strength=0:0.5:0.05 \
+  --output outputs/noise_perception_vs_polarization.csv
+```
 
 ## What are boids?
 

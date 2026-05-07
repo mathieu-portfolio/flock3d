@@ -67,6 +67,8 @@ struct SummaryStatistics {
     double mean_altitude_variance{};
     double mean_stall_count{};
     double mean_near_ground_count{};
+    double mean_noise_strength{};
+    double mean_order_loss{};
     double total_duration_seconds{};
     std::size_t sample_count{};
 };
@@ -93,6 +95,8 @@ private:
     double altitude_variance_total_{};
     double stall_count_total_{};
     double near_ground_count_total_{};
+    double noise_strength_total_{};
+    double order_loss_total_{};
 };
 
 class CsvMetricsWriter {

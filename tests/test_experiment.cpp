@@ -13,7 +13,7 @@
 TEST_CASE("CSV metrics writer exposes required header", "[experiment][csv]")
 {
     CHECK(flock3d::experiment::CsvMetricsWriter::header()
-        == "scenario,seed,timestamp,git_commit,export_mode,sample_rate_hz,sample_index,simulation_time,boid_count,polarization,cohesion,dispersion,average_speed,average_neighbors,nearest_neighbor_distance,simulation_update_ms,neighbor_queries,spatial_cell_count,mean_depth,depth_variance,mean_altitude,altitude_variance,stall_count,near_ground_count,sweep_parameter,sweep_value");
+        == "scenario,seed,timestamp,git_commit,export_mode,sample_rate_hz,sample_index,simulation_time,boid_count,polarization,cohesion,dispersion,average_speed,average_neighbors,nearest_neighbor_distance,simulation_update_ms,neighbor_queries,spatial_cell_count,mean_depth,depth_variance,mean_altitude,altitude_variance,stall_count,near_ground_count,noise_strength,order_loss,sweep_parameter,sweep_value");
 }
 
 TEST_CASE("SampleScheduler samples independently from fixed dt", "[experiment][sampling]")
@@ -149,7 +149,7 @@ TEST_CASE("Experiment sweeps BirdFlight constraint parameters", "[experiment][sw
 TEST_CASE("BirdFlight experiment presets are discoverable", "[experiment][preset][birdflight]")
 {
     const auto names = flock3d::experiment::experiment_preset_names();
-    CHECK(names.size() == 9);
+    CHECK(names.size() == 13);
     CHECK(flock3d::experiment::experiment_preset("bird_baseline").has_value());
     CHECK(flock3d::experiment::experiment_preset("bird_low_lift").has_value());
     CHECK(flock3d::experiment::experiment_preset("bird_high_gravity").has_value());
@@ -260,7 +260,7 @@ TEST_CASE("BirdFlight sampled and summary exports include stability metrics", "[
 TEST_CASE("FishSchool experiment presets are discoverable and overridable", "[experiment][preset][fishschool]")
 {
     const auto names = flock3d::experiment::experiment_preset_names();
-    CHECK(names.size() == 9);
+    CHECK(names.size() == 13);
     CHECK(flock3d::experiment::experiment_preset("fish_baseline").has_value());
     CHECK(flock3d::experiment::experiment_preset("fish_high_drag").has_value());
     CHECK(flock3d::experiment::experiment_preset("fish_strong_current").has_value());
@@ -275,6 +275,55 @@ TEST_CASE("FishSchool experiment presets are discoverable and overridable", "[ex
     CHECK(parameters.drag_coefficient == Catch::Approx(0.75F));
     REQUIRE(flock3d::experiment::apply_sweep_value(parameters, "drag_coefficient", 0.2));
     CHECK(parameters.drag_coefficient == Catch::Approx(0.2F));
+}
+
+TEST_CASE("NoiseExperiment presets and sweeps are discoverable", "[experiment][preset][noise]")
+{
+    const auto names = flock3d::experiment::experiment_preset_names();
+    CHECK(names.size() == 13);
+    CHECK(flock3d::experiment::experiment_preset("noise_baseline").has_value());
+    CHECK(flock3d::experiment::experiment_preset("noise_low").has_value());
+    CHECK(flock3d::experiment::experiment_preset("noise_medium").has_value());
+    CHECK(flock3d::experiment::experiment_preset("noise_high").has_value());
+
+    flock3d::experiment::ExperimentConfig config{};
+    REQUIRE(flock3d::experiment::apply_experiment_preset(config, "noise_medium"));
+    CHECK(config.scenario == flock3d::sim::ScenarioType::NoiseExperiment);
+
+    auto parameters = flock3d::experiment::experiment_parameters(config);
+    CHECK(parameters.model == flock3d::sim::SimulationModel::NoiseExperiment);
+    CHECK(parameters.noise_enabled);
+    REQUIRE(flock3d::experiment::apply_sweep_value(parameters, "perception_noise_strength", 0.25));
+    REQUIRE(flock3d::experiment::apply_sweep_value(parameters, "steering_noise_strength", 0.5));
+    CHECK(parameters.perception_noise_strength == Catch::Approx(0.25F));
+    CHECK(parameters.steering_noise_strength == Catch::Approx(0.5F));
+}
+
+TEST_CASE("NoiseExperiment sampled exports include robustness metrics", "[experiment][csv][noise]")
+{
+    const auto output_dir = std::filesystem::temp_directory_path() / "flock3d_test_exports";
+    std::filesystem::create_directories(output_dir);
+
+    flock3d::experiment::ExperimentConfig config{};
+    REQUIRE(flock3d::experiment::apply_experiment_preset(config, "noise_low"));
+    config.seed = 21U;
+    config.boids = 16U;
+    config.duration_seconds = 0.25;
+    config.sample_rate_hz = 4.0;
+    config.output_path = output_dir / "noise_sampled.csv";
+    config.export_mode = flock3d::experiment::ExportMode::SampledTimeSeries;
+
+    const auto result = flock3d::experiment::run_experiment(config);
+    CHECK(result.rows_written == 1U);
+
+    std::ifstream stream{config.output_path};
+    REQUIRE(stream.is_open());
+    std::string header{};
+    std::string row{};
+    std::getline(stream, header);
+    std::getline(stream, row);
+    CHECK(header.find("noise_strength,order_loss") != std::string::npos);
+    CHECK(row.find("Noise Experiment") != std::string::npos);
 }
 
 TEST_CASE("FishSchool sampled exports include depth metrics", "[experiment][csv][fishschool]")

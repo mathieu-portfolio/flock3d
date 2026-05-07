@@ -1,5 +1,6 @@
 #include <flock3d/experiment/ExperimentRunner.hpp>
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cmath>
@@ -50,6 +51,20 @@ namespace {
     return parameters;
 }
 
+
+[[nodiscard]] sim::SimulationParameters noise_preset_parameters(
+    float perception_noise_strength,
+    float steering_noise_strength,
+    float velocity_noise_strength)
+{
+    auto parameters = sim::build_scenario(sim::ScenarioType::NoiseExperiment).simulation_parameters;
+    parameters.noise_enabled = true;
+    parameters.perception_noise_strength = perception_noise_strength;
+    parameters.steering_noise_strength = steering_noise_strength;
+    parameters.velocity_noise_strength = velocity_noise_strength;
+    return parameters;
+}
+
 [[nodiscard]] sim::SimulationParameters fish_preset_parameters(
     float drag_coefficient,
     float current_strength,
@@ -65,7 +80,7 @@ namespace {
     return parameters;
 }
 
-[[nodiscard]] constexpr std::array<std::string_view, 9> preset_name_storage() noexcept
+[[nodiscard]] constexpr std::array<std::string_view, 13> preset_name_storage() noexcept
 {
     return {
         "bird_baseline",
@@ -77,6 +92,10 @@ namespace {
         "fish_high_drag",
         "fish_strong_current",
         "fish_low_visibility",
+        "noise_baseline",
+        "noise_low",
+        "noise_medium",
+        "noise_high",
     };
 }
 
@@ -205,6 +224,34 @@ std::optional<ExperimentPreset> experiment_preset(std::string_view name)
             "BirdFlight with limited turn response",
             sim::ScenarioType::BirdFlight,
             bird_preset_parameters(9.8F, 9.8F, 220.0F, 70.0F)};
+    }
+    if (name == "noise_baseline") {
+        return ExperimentPreset{
+            "noise_baseline",
+            "NoiseExperiment with deterministic noise disabled at zero strength",
+            sim::ScenarioType::NoiseExperiment,
+            noise_preset_parameters(0.0F, 0.0F, 0.0F)};
+    }
+    if (name == "noise_low") {
+        return ExperimentPreset{
+            "noise_low",
+            "NoiseExperiment with low perception and steering noise",
+            sim::ScenarioType::NoiseExperiment,
+            noise_preset_parameters(0.05F, 0.05F, 0.0F)};
+    }
+    if (name == "noise_medium") {
+        return ExperimentPreset{
+            "noise_medium",
+            "NoiseExperiment with medium perception, steering, and velocity noise",
+            sim::ScenarioType::NoiseExperiment,
+            noise_preset_parameters(0.15F, 0.15F, 0.03F)};
+    }
+    if (name == "noise_high") {
+        return ExperimentPreset{
+            "noise_high",
+            "NoiseExperiment with high controlled noise for order-loss studies",
+            sim::ScenarioType::NoiseExperiment,
+            noise_preset_parameters(0.35F, 0.35F, 0.08F)};
     }
     if (name == "fish_baseline") {
         return ExperimentPreset{
@@ -396,6 +443,26 @@ bool apply_sweep_value(sim::SimulationParameters& parameters, std::string_view p
     }
     if (parameter == "current_direction_z") {
         parameters.current_direction.z = float_value;
+        return true;
+    }
+    if (parameter == "perception_noise_strength" || parameter == "perception_noise") {
+        parameters.perception_noise_strength = float_value;
+        return true;
+    }
+    if (parameter == "steering_noise_strength" || parameter == "steering_noise") {
+        parameters.steering_noise_strength = float_value;
+        return true;
+    }
+    if (parameter == "velocity_noise_strength" || parameter == "velocity_noise") {
+        parameters.velocity_noise_strength = float_value;
+        return true;
+    }
+    if (parameter == "noise_seed_offset") {
+        parameters.noise_seed_offset = static_cast<std::uint32_t>(std::max(0.0, value));
+        return true;
+    }
+    if (parameter == "noise_enabled") {
+        parameters.noise_enabled = value != 0.0;
         return true;
     }
     return false;

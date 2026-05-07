@@ -196,9 +196,15 @@ ScenarioDefinition build_scenario(ScenarioType type) noexcept
         break;
     case ScenarioType::NoiseExperiment:
         definition.display_name = "Noise Experiment";
-        definition.description = "Placeholder for future controlled noise sweeps; currently reuses classic boids behavior.";
+        definition.description = "Controlled perception, steering, and velocity noise for measuring collective-order robustness.";
+        definition.simulation_parameters.model = SimulationModel::NoiseExperiment;
         definition.simulation_parameters.random_seed = 7901U;
-        definition.behavior.alignment_weight = 0.75F;
+        definition.simulation_parameters.noise_enabled = true;
+        definition.simulation_parameters.perception_noise_strength = 0.0F;
+        definition.simulation_parameters.steering_noise_strength = 0.0F;
+        definition.simulation_parameters.velocity_noise_strength = 0.0F;
+        definition.simulation_parameters.noise_seed_offset = 50'000U;
+        definition.behavior.alignment_weight = 1.0F;
         definition.behavior.neighbor_radius = 5.0F;
         break;
     }

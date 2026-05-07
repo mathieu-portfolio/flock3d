@@ -43,6 +43,7 @@ void BoidSimulation::reset(std::uint32_t boid_count)
     velocities_.clear();
     accelerations_.clear();
     neighbor_indices_.clear();
+    noise_step_ = 0;
     positions_.reserve(boid_count);
     velocities_.reserve(boid_count);
     accelerations_.reserve(boid_count);
@@ -95,6 +96,9 @@ void BoidSimulation::update_model(float dt, SimulationMetrics* metrics)
     case SimulationModel::FishSchool:
         update_fish_school(dt, metrics);
         break;
+    case SimulationModel::NoiseExperiment:
+        update_noise_experiment(dt, metrics);
+        break;
     default:
         update_classic_boids(dt, metrics);
         break;
@@ -132,11 +136,28 @@ void BoidSimulation::update_fish_school(float dt, SimulationMetrics* metrics)
         });
 }
 
+void BoidSimulation::update_noise_experiment(float dt, SimulationMetrics* metrics)
+{
+    update_shared_flocking(
+        dt,
+        metrics,
+        ModelBehavior{
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+        });
+}
+
 void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
 {
     const float query_radius = effective_query_radius(parameters_);
     const float neighbor_radius_squared = parameters_.neighbor_radius * parameters_.neighbor_radius;
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
+    const bool noise_active = behavior.apply_noise && parameters_.noise_enabled;
+    const std::uint64_t noise_step = noise_step_;
 
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 position = positions_[i];
@@ -160,9 +181,17 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                 continue;
             }
 
-            const Vector3 offset = math::subtract(positions_[neighbor_index], position);
+            Vector3 offset = math::subtract(positions_[neighbor_index], position);
             if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
                 continue;
+            }
+            if (noise_active && parameters_.perception_noise_strength > 0.0F) {
+                const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 1U);
+                offset = math::add(
+                    offset,
+                    math::scale(
+                        deterministic_noise_vector(i, channel, noise_step),
+                        parameters_.perception_noise_strength * parameters_.neighbor_radius));
             }
             const float distance_squared = math::length_squared(offset);
             if (distance_squared <= 0.000001F) {
@@ -181,8 +210,17 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             }
 
             if (distance_squared <= neighbor_radius_squared) {
-                alignment_sum = math::add(alignment_sum, velocities_[neighbor_index]);
-                cohesion_sum = math::add(cohesion_sum, positions_[neighbor_index]);
+                Vector3 perceived_velocity = velocities_[neighbor_index];
+                if (noise_active && parameters_.perception_noise_strength > 0.0F) {
+                    const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 2U);
+                    perceived_velocity = math::add(
+                        perceived_velocity,
+                        math::scale(
+                            deterministic_noise_vector(i, channel, noise_step),
+                            parameters_.perception_noise_strength * parameters_.max_speed));
+                }
+                alignment_sum = math::add(alignment_sum, perceived_velocity);
+                cohesion_sum = math::add(cohesion_sum, math::add(position, offset));
                 ++flock_count;
             }
         }
@@ -218,6 +256,13 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         if (behavior.add_fish_medium_acceleration) {
             acceleration = math::add(acceleration, fish_medium_acceleration(position, velocity));
         }
+        if (noise_active && parameters_.steering_noise_strength > 0.0F) {
+            acceleration = math::add(
+                acceleration,
+                math::scale(
+                    deterministic_noise_vector(i, 10'001U, noise_step),
+                    parameters_.steering_noise_strength * parameters_.max_force));
+        }
 
         accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
     }
@@ -240,9 +285,21 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                 desired_velocity = enforce_min_speed(desired_velocity);
             }
         }
+        if (noise_active && parameters_.velocity_noise_strength > 0.0F) {
+            desired_velocity = math::add(
+                desired_velocity,
+                math::scale(
+                    deterministic_noise_vector(i, 20'001U, noise_step),
+                    parameters_.velocity_noise_strength * parameters_.max_speed));
+            desired_velocity = math::clamp_length(desired_velocity, parameters_.max_speed);
+        }
         velocities_[i] = desired_velocity;
         positions_[i] = math::add(positions_[i], math::scale(velocities_[i], dt));
         wrap_position(positions_[i]);
+    }
+
+    if (behavior.apply_noise) {
+        ++noise_step_;
     }
 }
 
@@ -398,8 +455,10 @@ void BoidSimulation::rebuild_spatial_hash()
 
 void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const noexcept
 {
+    metrics.noise_strength = combined_noise_strength();
     if (positions_.empty()) {
         metrics.record_collective_behavior(0.0F, 0.0F, 0.0F, 0.0F);
+        metrics.order_loss = 1.0F;
         return;
     }
 
@@ -451,6 +510,7 @@ void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const
     const float dispersion = static_cast<float>(std::sqrt(distance_squared_total / static_cast<double>(positions_.size())));
     const float average_speed = static_cast<float>(speed_total / static_cast<double>(positions_.size()));
     metrics.record_collective_behavior(polarization, cohesion, dispersion, average_speed);
+    metrics.order_loss = 1.0F - polarization;
     metrics.record_fish_metrics(
         static_cast<float>(mean_depth),
         static_cast<float>(depth_variance_total / static_cast<double>(positions_.size())));
@@ -459,6 +519,30 @@ void BoidSimulation::record_collective_metrics(SimulationMetrics& metrics) const
         static_cast<float>(altitude_variance_total / static_cast<double>(positions_.size())),
         stall_count,
         near_ground_count);
+}
+
+Vector3 BoidSimulation::deterministic_noise_vector(std::size_t boid_index, std::uint32_t channel, std::uint64_t step) const
+{
+    const auto seed = static_cast<std::uint32_t>(
+        parameters_.random_seed
+        + parameters_.noise_seed_offset
+        + (static_cast<std::uint32_t>(boid_index) * 747'796'405U)
+        + (channel * 2'891'336'453U)
+        + (static_cast<std::uint32_t>(step) * 277'803'737U));
+    std::mt19937 rng{seed};
+    return random_direction(rng);
+}
+
+float BoidSimulation::combined_noise_strength() const noexcept
+{
+    if (!parameters_.noise_enabled || parameters_.model != SimulationModel::NoiseExperiment) {
+        return 0.0F;
+    }
+    return std::max({
+        parameters_.perception_noise_strength,
+        parameters_.steering_noise_strength,
+        parameters_.velocity_noise_strength,
+    });
 }
 
 Vector3 BoidSimulation::seek(Vector3 position, Vector3 velocity, Vector3 target) const noexcept
