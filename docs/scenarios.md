@@ -74,8 +74,9 @@ BirdFlight studies how simple flight constraints change flock stability relative
 
 ### Suggested experiments
 
-- Sweep `gravity` and plot mean `altitude_variance` or `stall_count`.
-- Sweep `field_of_view_degrees` to measure the cost of narrow forward perception.
+- Sweep `field_of_view_degrees` and plot `polarization`, `dispersion`, `average_neighbors`, and `stall_count` to measure the cost of narrow forward perception.
+- Sweep `max_turn_rate` and plot `polarization`, `dispersion`, `cohesion`, and `altitude_variance` to measure how maneuverability limits change collective order and vertical stability.
+- Gravity remains useful as a secondary altitude-control sweep, but BirdFlight's curated study focuses on perception and maneuverability constraints.
 - Compare `bird_baseline`, `bird_low_lift`, `bird_high_gravity`, `bird_narrow_fov`, and `bird_low_turn_rate` presets with summary exports.
 
 ## FishSchool
@@ -105,7 +106,7 @@ FishSchool studies schooling inside a resistive underwater-style medium. It keep
 
 ### Suggested experiments
 
-- Sweep `drag_coefficient` and plot mean `cohesion` or `average_speed`.
+- Sweep `drag_coefficient` and plot `polarization`, `cohesion`, `average_speed`, and `depth_variance` to measure how resistive damping affects alignment, grouping, speed, and depth keeping.
 - Sweep `current_strength` to compare current-driven drift against polarization and dispersion.
 - Compare `fish_baseline`, `fish_high_drag`, `fish_strong_current`, and `fish_low_visibility` presets.
 
@@ -131,7 +132,7 @@ NoiseExperiment asks how much noisy local information or noisy actuation a flock
 
 ### Suggested experiments
 
-- Sweep `steering_noise_strength` and plot mean `polarization`.
+- Sweep `steering_noise_strength` and plot `polarization`, `order_loss`, `dispersion`, and `cohesion` to measure collective-order degradation, loss of cohesion, and spatial spreading.
 - Repeat with `perception_noise_strength` to compare sensing noise against actuation noise.
 - Compare `noise_baseline`, `noise_low`, `noise_medium`, and `noise_high` presets.
 
