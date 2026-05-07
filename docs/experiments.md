@@ -127,16 +127,6 @@ python scripts/compare_sweeps.py \
 
 Both scripts check that requested columns exist and exit with an error listing the available columns when a CSV schema or CLI argument does not match.
 
-## Portfolio artifact curation
-
-For a polished README, keep generated working files and curated display files conceptually separate:
-
-- Use `outputs/<study_name>/` for fresh local runs produced by the study scripts.
-- Use `results/<study_name>/` for checked-in or release-ready plots selected for presentation.
-- Use `resources/` for screenshots or short GIFs from the interactive renderer.
-
-Prefer descriptive filenames so the README gallery can be maintained by inspection: `noise_strength_vs_polarization.png`, `turn_rate_vs_altitude_variance.png`, `drag_vs_cohesion.png`, `fish_overlay.png`, or `bird_flock_camera.png`. Avoid linking a README image until the file exists in the repository.
-
 ## Generate example studies
 
 The `scripts/run_*_study.sh` recipe scripts turn the runner and plotting tools into one-command, reproducible result generation for documentation and portfolio artifacts. The scripts currently write working artifacts under `outputs/<study_name>/`; copy curated images to `results/<study_name>/` when you want stable README-facing plots. Each script:

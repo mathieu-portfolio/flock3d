@@ -47,6 +47,8 @@ ClassicBoids is the baseline Reynolds-style 3D flocking scenario. It is the refe
 
 ## BirdFlight
 
+![Birds](/resources/birds.png)
+
 ### Purpose
 
 BirdFlight studies how simple flight constraints change flock stability relative to ClassicBoids. It is intentionally not an aerodynamic model; it is a controlled scenario for gravity, lift, perception, and maneuverability tradeoffs.
@@ -81,6 +83,8 @@ BirdFlight studies how simple flight constraints change flock stability relative
 
 ## FishSchool
 
+![Fish](/resources/fish.png)
+
 ### Purpose
 
 FishSchool studies schooling inside a resistive underwater-style medium. It keeps shared separation/alignment/cohesion steering but adds drag, depth preference, smooth turning, buoyancy, and optional current.
@@ -111,6 +115,8 @@ FishSchool studies schooling inside a resistive underwater-style medium. It keep
 - Compare `fish_baseline`, `fish_high_drag`, `fish_strong_current`, and `fish_low_visibility` presets.
 
 ## NoiseExperiment
+
+![Noise](/resources/noise.png)
 
 ### Purpose
 

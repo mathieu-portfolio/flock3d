@@ -4,13 +4,7 @@
 
 `flock3d` combines an interactive raylib renderer with a headless experiment runner, sampled CSV exports, and lightweight plotting scripts. It is built as both a polished systems-programming portfolio project and a small scientific sandbox for studying how local rules produce group-level motion.
 
-## Visual overview
-
-Visual assets are curated from `resources/` for interactive screenshots/GIFs and from `results/<study_name>/` for generated scientific plots. This checkout does not currently contain pushed image files in either location, so the README avoids hardcoding broken image links.
-
-<p align="center">
-  <em>Add screenshots to `resources/` and study plots to `results/<study_name>/`, then link the selected files here as the hero image and comparison gallery.</em>
-</p>
+![Hero](resources/hero.png)
 
 ## Why it is interesting
 
@@ -26,18 +20,6 @@ Visual assets are curated from `resources/` for interactive screenshots/GIFs and
 - Implemented scenarios for **ClassicBoids**, **BirdFlight**, **FishSchool**, and **NoiseExperiment**.
 - Sampled CSV export, summary export, curated study scripts, and Python plotting utilities.
 - Catch2 tests for core simulation, experiment, controls, and spatial-hash behavior.
-
-## Visual gallery
-
-The gallery should link only files that exist in the repository. Use filename cues to choose representative assets:
-
-| Role | Source | Filename cues |
-| --- | --- | --- |
-| Hero screenshot/GIF | `resources/` | `bird`, `fish`, `boid`, `overlay` |
-| Scenario comparison | `resources/` | `bird`, `fish`, `noise`, `overlay` |
-| Quantitative plot | `results/<study_name>/` | `plot`, `polarization`, `cohesion`, `altitude` |
-
-Keep checked-in images small enough for GitHub to render quickly. Use generated plots for quantitative results and screenshots/GIFs for first-contact visual impact.
 
 ## Example results
 
@@ -101,11 +83,10 @@ The interactive app and experiment runner reuse the same simulation and scenario
 simulate → export CSV → analyze → generate plots
 ```
 
-Two common entry points:
+Common entry points:
 
 ```bash
-./scripts/run_noise_study.sh
-python scripts/plot_metric.py --input outputs/run.csv --x simulation_time --y polarization --output outputs/polarization.png
+./scripts/run_<study_name>.sh
 ```
 
 For presets, sweeps, export modes, and plotting details, see [docs/experiments.md](docs/experiments.md).
