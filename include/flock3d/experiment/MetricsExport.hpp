@@ -107,7 +107,7 @@ public:
     [[nodiscard]] bool is_open() const noexcept { return stream_.is_open(); }
     [[nodiscard]] const std::filesystem::path& output_path() const noexcept { return output_path_; }
 
-    static constexpr std::string_view header();
+    [[nodiscard]] static std::string_view header() noexcept;
 
 private:
     std::ofstream stream_{};

@@ -190,7 +190,7 @@ void CsvMetricsWriter::write_sample(const SampleMetadata& metadata, const sim::S
     stream_ << '\n';
 }
 
-constexpr std::string_view CsvMetricsWriter::header()
+std::string_view CsvMetricsWriter::header() noexcept
 {
     return csv_header;
 }
