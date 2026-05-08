@@ -91,6 +91,10 @@ Common entry points:
 
 For presets, sweeps, export modes, and plotting details, see [docs/experiments.md](docs/experiments.md).
 
+## Benchmarks
+
+Focused performance benchmarks live in [docs/benchmarks.md](docs/benchmarks.md). They print CSV to stdout, keep progress output separate from data, and intentionally use fewer than 512 boids so clustering-driven slowdown can be observed before adding optimizations or parallelism.
+
 ## Documentation
 
 - [docs/scenarios.md](docs/scenarios.md): scenario purpose, parameters, metrics, and suggested scientific questions.
