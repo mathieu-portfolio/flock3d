@@ -1,0 +1,138 @@
+# Benchmarking flock3d
+
+These benchmark executables are for performance diagnosis before optimization. They are intentionally separate from the experiment runner and scientific CSV exports: experiments answer behavior questions, while benchmarks show where single-threaded time is spent.
+
+## Why the benchmark sizes are small
+
+Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks therefore use boid counts below 512 by default (`64`, `128`, `256`, and `384`). This keeps runs practical while still making time-series slowdown visible.
+
+Each benchmark runs every scenario for a fixed wall-clock duration, samples at a regular cadence, and prints one CSV row per sample window. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
+
+## Build
+
+Use a release build for representative timings:
+
+```bash
+cmake --preset release
+cmake --build --preset release --target \
+  flock3d_spatial_hash_benchmark \
+  flock3d_simulation_update_benchmark \
+  flock3d_metrics_benchmark \
+  flock3d_noise_benchmark
+```
+
+The executables are written to `build/release/bin/` for the default release preset.
+
+## Common options
+
+All focused benchmarks accept the same lightweight options:
+
+```bash
+--duration seconds   # timed duration per scenario, default 30
+--sample seconds     # CSV sample window length, default 5
+--warmup seconds     # untimed warm-up per scenario, default 1
+```
+
+CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stdout and stderr are both terminals, keeping redirected CSV files clean.
+
+Example progress display:
+
+```text
+[##########----------]  50% | simulation_update | ClassicBoids | 256 boids | 15.0s / 30s
+```
+
+## Suggested first commands
+
+```bash
+mkdir -p outputs/benchmarks
+
+./build/release/bin/flock3d_simulation_update_benchmark \
+  > outputs/benchmarks/sim_update.csv
+
+./build/release/bin/flock3d_spatial_hash_benchmark \
+  > outputs/benchmarks/spatial_hash.csv
+
+./build/release/bin/flock3d_metrics_benchmark \
+  > outputs/benchmarks/metrics.csv
+
+./build/release/bin/flock3d_noise_benchmark \
+  > outputs/benchmarks/noise.csv
+```
+
+For a quick smoke run while changing benchmark code, shorten the duration and sample window:
+
+```bash
+./build/release/bin/flock3d_simulation_update_benchmark --duration 0.2 --sample 0.1 --warmup 0
+```
+
+## Benchmark targets
+
+### `flock3d_simulation_update_benchmark`
+
+Measures total `BoidSimulation::update` cost with metrics disabled for these models:
+
+- `ClassicBoids`
+- `BirdFlight`
+- `FishSchool`
+- `NoiseExperiment`
+
+Columns:
+
+```text
+scenario,model,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms
+```
+
+### `flock3d_spatial_hash_benchmark`
+
+Measures spatial hash rebuild, spatial neighbor query, and naive neighbor counting separately while a deterministic ClassicBoids simulation evolves. It reports density/radius scenarios:
+
+- `low_density`
+- `baseline_density`
+- `high_density`
+- `small_radius`
+- `large_radius`
+
+Columns:
+
+```text
+scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches
+```
+
+Use `candidates_per_query`, `effective_neighbors_per_query`, `occupied_cell_count`, `max_cell_occupancy`, and `average_cell_occupancy` to see whether late-run slowdown corresponds to clustering or worsening candidate density. `count_mismatches` should remain `0`; it compares spatial neighbor counts to naive counts for the same positions.
+
+### `flock3d_metrics_benchmark`
+
+Measures ClassicBoids update cost with and without a metrics pointer:
+
+- `no_metrics`
+- `metrics_pointer`
+
+Columns:
+
+```text
+scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms
+```
+
+The code currently exposes a null/non-null metrics pointer rather than separate basic/full metric levels, so this benchmark isolates the overhead of enabling the existing metrics path.
+
+### `flock3d_noise_benchmark`
+
+Measures `NoiseExperiment` update cost for deterministic noise combinations:
+
+- `zero_noise`
+- `steering_noise`
+- `perception_noise`
+- `velocity_noise`
+- `all_noise`
+
+Columns:
+
+```text
+scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength
+```
+
+This benchmark helps decide whether deterministic noise generation should be optimized before model or spatial-hash changes.
+
+## Interpreting time-series rows
+
+Rows with the same scenario/model/mode and boid count are ordered by `sample_index`. Inspect how `mean_update_ms`, `max_update_ms`, candidate counts, effective neighbors, and cell occupancy change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.
