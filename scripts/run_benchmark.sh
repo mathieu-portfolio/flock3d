@@ -53,9 +53,9 @@ Options:
                         FLOCK3D_BENCHMARK_PRESET/CMAKE_PRESET when set)
   --output-dir DIR      Directory for CSV output (default: outputs/benchmarks,
                         or FLOCK3D_BENCHMARK_OUTPUT_DIR when set)
-  --duration SECONDS    Timed duration per scenario, forwarded to benchmarks
-  --sample SECONDS      CSV sample window length, forwarded to benchmarks
-  --warmup SECONDS      Untimed warm-up per scenario, forwarded to benchmarks
+  --duration SECONDS    Simulated duration per scenario, forwarded to benchmarks
+  --sample SECONDS      Simulated CSV sample window length, forwarded to benchmarks
+  --warmup SECONDS      Simulated warm-up per scenario, forwarded to benchmarks
   --clean               Remove build/<preset> before configuring
   --skip-build          Run existing benchmark binaries without rebuilding
   --summary             Write a compact latest-sample summary CSV after benchmarks run

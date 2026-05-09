@@ -16,6 +16,15 @@ TEST_CASE("Benchmark progress only requires an interactive stderr", "[benchmark]
     CHECK_FALSE(flock3d::bench::progress_enabled_for_streams(false, false));
 }
 
+TEST_CASE("Common benchmark windows convert simulated seconds to fixed ticks", "[benchmark][common]")
+{
+    CHECK(flock3d::bench::simulated_seconds_to_ticks(0.0) == 0U);
+    CHECK(flock3d::bench::simulated_seconds_to_ticks(1.0 / 120.0) == 1U);
+    CHECK(flock3d::bench::simulated_seconds_to_ticks(0.001) == 1U);
+    CHECK(flock3d::bench::simulated_seconds_to_ticks(1.0) == 120U);
+    CHECK(flock3d::bench::ticks_to_simulated_seconds(120U) == Catch::Approx(1.0));
+}
+
 TEST_CASE("Fixed tick benchmark converts simulated seconds to ticks", "[benchmark][ticks]")
 {
     using flock3d::bench::ticks::seconds_to_ticks;
@@ -23,6 +32,7 @@ TEST_CASE("Fixed tick benchmark converts simulated seconds to ticks", "[benchmar
     CHECK(seconds_to_ticks(5.0, 1.0 / 60.0) == 300U);
     CHECK(seconds_to_ticks(25.0, 1.0 / 60.0) == 1500U);
     CHECK(seconds_to_ticks(0.0, 1.0 / 60.0) == 0U);
+    CHECK(seconds_to_ticks(0.001, 1.0 / 60.0) == 1U);
     CHECK_THROWS_AS(seconds_to_ticks(1.0, 0.0), std::invalid_argument);
 }
 

@@ -6,7 +6,7 @@ These benchmark executables are for performance diagnosis before optimization. T
 
 Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks therefore use boid counts below 512 by default (`64`, `128`, `256`, and `384`). This keeps runs practical while still making time-series slowdown visible.
 
-Most focused benchmarks run every scenario for a fixed wall-clock duration, sample at a regular cadence, and print one CSV row per sample window. The fixed-tick simulation benchmark is the exception: it advances a configured number of simulated ticks as fast as possible and prints compact one-row summaries per repetition. Comparing early, middle, and late rows in the wall-clock-sampled benchmarks helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
+Focused benchmarks advance fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
 
 ## Build
 
@@ -28,15 +28,15 @@ The executables are written to `build/release/bin/` for the default release pres
 
 ## Common options
 
-The wall-clock-sampled focused benchmarks accept the same lightweight options:
+The focused benchmarks accept the same lightweight simulated-time options:
 
 ```bash
---duration seconds   # timed duration per scenario, default 20
---sample seconds     # CSV sample window length, default 5
---warmup seconds     # untimed warm-up per scenario, default 1
+--duration seconds   # simulated duration per scenario, default 20
+--sample seconds     # simulated CSV sample window length, default 5
+--warmup seconds     # simulated warm-up per scenario, default 1
 ```
 
-CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing progress in your terminal.
+CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal.
 
 Example progress display:
 
@@ -250,4 +250,4 @@ This benchmark helps decide whether deterministic noise generation should be opt
 
 ## Interpreting time-series rows
 
-Rows with the same scenario/model/mode and boid count are ordered by `sample_index`. Inspect how `mean_update_ms`, `max_update_ms`, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.
+Rows with the same scenario/model/mode and boid count are ordered by `sample_index`, and `elapsed_seconds` is simulated elapsed time. Inspect how `mean_update_ms`, `max_update_ms`, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.

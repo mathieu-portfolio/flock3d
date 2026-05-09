@@ -30,6 +30,7 @@ inline constexpr double default_duration_seconds = 20.0;
 inline constexpr double default_sample_seconds = 5.0;
 inline constexpr double default_warmup_seconds = 1.0;
 inline constexpr float fixed_dt = 1.0F / 120.0F;
+inline constexpr double fixed_dt_seconds = static_cast<double>(fixed_dt);
 
 using flock3d::sim::SimulationParameters;
 using flock3d::sim::sync_spatial_cell_size_to_query_radius;
@@ -68,8 +69,8 @@ struct UpdateStats {
 inline void print_usage(std::string_view executable)
 {
     std::cerr << "Usage: " << executable
-              << " [--duration seconds] [--sample seconds] [--warmup seconds]\n"
-              << "CSV is printed to stdout. Progress is printed to stderr only when stderr is a terminal.\n";
+              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds]\n"
+              << "CSV is printed to stdout. Benchmarks advance simulated time as fast as possible; progress is printed to stderr only when stderr is a terminal.\n";
 }
 
 inline BenchmarkOptions parse_options(int argc, char** argv)
@@ -99,6 +100,22 @@ inline BenchmarkOptions parse_options(int argc, char** argv)
         }
     }
     return options;
+}
+
+[[nodiscard]] inline std::size_t simulated_seconds_to_ticks(double seconds, double dt = fixed_dt_seconds)
+{
+    if (dt <= 0.0 || !std::isfinite(dt)) {
+        return 0U;
+    }
+    if (seconds <= 0.0) {
+        return 0U;
+    }
+    return static_cast<std::size_t>(std::ceil(seconds / dt));
+}
+
+[[nodiscard]] inline double ticks_to_simulated_seconds(std::size_t ticks, double dt = fixed_dt_seconds) noexcept
+{
+    return static_cast<double>(ticks) * dt;
 }
 
 inline bool stream_is_terminal(int file_descriptor) noexcept

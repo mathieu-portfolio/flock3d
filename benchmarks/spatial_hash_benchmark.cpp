@@ -1,6 +1,5 @@
 #include "benchmark_common.hpp"
 
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
@@ -17,7 +16,6 @@
 namespace {
 
 using flock3d::bench::BenchmarkOptions;
-using flock3d::bench::Clock;
 using flock3d::bench::ProgressBar;
 using flock3d::bench::UpdateStats;
 
@@ -128,25 +126,20 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
     std::vector<std::size_t> neighbors;
     neighbors.reserve(boid_count);
 
-    const auto warmup_start = Clock::now();
-    while (std::chrono::duration<double>(Clock::now() - warmup_start).count() < options.warmup_seconds) {
+    const std::size_t warmup_ticks = flock3d::bench::simulated_seconds_to_ticks(options.warmup_seconds);
+    for (std::size_t tick = 0; tick < warmup_ticks; ++tick) {
         simulation.update(flock3d::bench::fixed_dt, nullptr);
     }
 
-    const auto benchmark_start = Clock::now();
-    auto sample_start = benchmark_start;
+    const std::size_t total_ticks = flock3d::bench::simulated_seconds_to_ticks(options.duration_seconds);
+    const std::size_t sample_ticks = std::max<std::size_t>(1U, flock3d::bench::simulated_seconds_to_ticks(options.sample_seconds));
+    std::size_t completed_ticks = 0U;
     int sample_index = 0;
 
-    while (std::chrono::duration<double>(Clock::now() - benchmark_start).count() < options.duration_seconds) {
+    while (completed_ticks < total_ticks) {
         SpatialSampleStats stats{};
-        while (true) {
-            const auto now = Clock::now();
-            const double elapsed = std::chrono::duration<double>(now - benchmark_start).count();
-            const double sample_elapsed = std::chrono::duration<double>(now - sample_start).count();
-            if (elapsed >= options.duration_seconds || (stats.rebuild.count > 0 && sample_elapsed >= options.sample_seconds)) {
-                break;
-            }
-
+        const std::size_t sample_start_tick = completed_ticks;
+        while (completed_ticks < total_ticks && (stats.rebuild.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
             const auto& positions = simulation.positions();
             flock3d::sim::SpatialHash3D hash{flock3d::sim::effective_query_radius(simulation.parameters())};
             const double rebuild_ms = flock3d::bench::time_ms([&hash, &positions]() {
@@ -179,13 +172,15 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
                 spatial_result.effective_neighbors == naive_neighbors);
 
             simulation.update(flock3d::bench::fixed_dt, nullptr);
+            ++completed_ticks;
 
+            const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
             if ((stats.rebuild.count % 16U) == 0U) {
                 progress.update("spatial_hash", scenario.name, boid_count, elapsed, options.duration_seconds);
             }
         }
 
-        const double elapsed = std::chrono::duration<double>(Clock::now() - benchmark_start).count();
+        const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
         std::cout << scenario.name << ',' << boid_count << ',' << std::fixed << std::setprecision(3) << elapsed << ','
                   << sample_index << ',' << stats.rebuild.count << ',' << stats.rebuild.mean_ms() << ','
                   << stats.rebuild.min_or_zero() << ',' << stats.rebuild.max_ms << ',' << stats.spatial_query.mean_ms()
@@ -197,7 +192,6 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
                   << stats.average(stats.occupied_cells_total) << ',' << stats.average(stats.max_cell_occupancy_total)
                   << ',' << stats.average(stats.average_cell_occupancy_total) << ',' << stats.count_mismatches << '\n';
         ++sample_index;
-        sample_start = Clock::now();
     }
     progress.finish();
 }
