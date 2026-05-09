@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstddef>
 
 #include <raylib.h>
 
@@ -23,6 +24,14 @@ struct SimulationParameters {
     float max_initial_speed{8.0F};
     float max_speed{10.0F};
     float neighbor_radius{4.0F};
+    // A zero base perception radius keeps legacy fixed-radius behavior by using neighbor_radius.
+    float base_perception_radius{0.0F};
+    float min_perception_radius{0.0F};
+    float max_perception_radius{0.0F};
+    std::uint32_t target_neighbor_count{32U};
+    // A zero max keeps legacy uncapped metric-neighbor behavior.
+    std::size_t max_selected_neighbors{0U};
+    bool adaptive_perception_enabled{false};
     float separation_radius{2.0F};
     float separation_weight{1.5F};
     float alignment_weight{1.0F};
@@ -57,7 +66,16 @@ struct SimulationParameters {
 
 [[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept
 {
-    return std::max(parameters.neighbor_radius, parameters.separation_radius);
+    const float base_radius = parameters.base_perception_radius > 0.0F
+        ? parameters.base_perception_radius
+        : parameters.neighbor_radius;
+    const float configured_max_radius = parameters.max_perception_radius > 0.0F
+        ? parameters.max_perception_radius
+        : base_radius;
+    const float perception_query_radius = parameters.adaptive_perception_enabled
+        ? std::max(base_radius, configured_max_radius)
+        : base_radius;
+    return std::max(perception_query_radius, parameters.separation_radius);
 }
 
 constexpr void sync_spatial_cell_size_to_query_radius(SimulationParameters& parameters) noexcept
