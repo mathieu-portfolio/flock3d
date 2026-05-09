@@ -10,15 +10,18 @@ Each benchmark runs every scenario for a fixed wall-clock duration, samples at a
 
 ## Build
 
-Use a release build for representative timings:
+Use a release build for representative timings. The dedicated build preset compiles the focused benchmark targets without rebuilding the app or tests:
 
 ```bash
 cmake --preset release
-cmake --build --preset release --target \
-  flock3d_spatial_hash_benchmark \
-  flock3d_simulation_update_benchmark \
-  flock3d_metrics_benchmark \
-  flock3d_noise_benchmark
+cmake --build --preset benchmark
+```
+
+Use `benchmark-ninja` with the `release-ninja` configure preset when you prefer Ninja:
+
+```bash
+cmake --preset release-ninja
+cmake --build --preset benchmark-ninja
 ```
 
 The executables are written to `build/release/bin/` for the default release preset.
@@ -43,11 +46,40 @@ Example progress display:
 
 ## Suggested first commands
 
+The helper script builds the selected benchmark targets with a release preset and writes clean CSV files under `outputs/benchmarks/`:
+
+```bash
+scripts/run_benchmark.sh
+```
+
+Run one focused benchmark by name when you only need a single CSV:
+
+```bash
+scripts/run_benchmark.sh simulation_update
+scripts/run_benchmark.sh spatial_hash
+scripts/run_benchmark.sh metrics
+scripts/run_benchmark.sh noise
+```
+
+For a quick smoke run while changing benchmark code, shorten the duration and sample window:
+
+```bash
+scripts/run_benchmark.sh --duration 0.2 --sample 0.1 --warmup 0 simulation_update
+```
+
+Use `--preset`, `--output-dir`, or the `FLOCK3D_BENCHMARK_*` environment variables when you need a different build preset, destination directory, or default timing options. Arguments after `--` are forwarded directly to the benchmark executable:
+
+```bash
+scripts/run_benchmark.sh --preset release-ninja --output-dir outputs/benchmarks/nightly all -- --duration 10
+```
+
+You can still run the executables directly if you need shell-specific redirection:
+
 ```bash
 mkdir -p outputs/benchmarks
 
 ./build/release/bin/flock3d_simulation_update_benchmark \
-  > outputs/benchmarks/sim_update.csv
+  > outputs/benchmarks/simulation_update.csv
 
 ./build/release/bin/flock3d_spatial_hash_benchmark \
   > outputs/benchmarks/spatial_hash.csv
@@ -57,12 +89,6 @@ mkdir -p outputs/benchmarks
 
 ./build/release/bin/flock3d_noise_benchmark \
   > outputs/benchmarks/noise.csv
-```
-
-For a quick smoke run while changing benchmark code, shorten the duration and sample window:
-
-```bash
-./build/release/bin/flock3d_simulation_update_benchmark --duration 0.2 --sample 0.1 --warmup 0
 ```
 
 ## Benchmark targets

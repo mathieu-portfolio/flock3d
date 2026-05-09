@@ -93,7 +93,7 @@ For presets, sweeps, export modes, and plotting details, see [docs/experiments.m
 
 ## Benchmarks
 
-Focused performance benchmarks live in [docs/benchmarks.md](docs/benchmarks.md). They print CSV to stdout, keep progress output separate from data, and intentionally use fewer than 512 boids so clustering-driven slowdown can be observed before adding optimizations or parallelism.
+Focused performance benchmarks live in [docs/benchmarks.md](docs/benchmarks.md). Run `./scripts/run_benchmark.sh` to build the release benchmark targets and write CSV outputs under `outputs/benchmarks/`; the underlying executables still print CSV to stdout and keep progress output separate from data. They intentionally use fewer than 512 boids so clustering-driven slowdown can be observed before adding optimizations or parallelism.
 
 ## Documentation
 
