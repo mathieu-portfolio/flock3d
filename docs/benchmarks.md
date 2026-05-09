@@ -6,7 +6,7 @@ These benchmark executables are for performance diagnosis before optimization. T
 
 Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks therefore use boid counts below 512 by default (`64`, `128`, `256`, and `384`). This keeps runs practical while still making time-series slowdown visible.
 
-Each benchmark runs every scenario for a fixed wall-clock duration, samples at a regular cadence, and prints one CSV row per sample window. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
+Most focused benchmarks run every scenario for a fixed wall-clock duration, sample at a regular cadence, and print one CSV row per sample window. The fixed-tick simulation benchmark is the exception: it advances a configured number of simulated ticks as fast as possible and prints compact one-row summaries per repetition. Comparing early, middle, and late rows in the wall-clock-sampled benchmarks helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
 
 ## Build
 
@@ -28,7 +28,7 @@ The executables are written to `build/release/bin/` for the default release pres
 
 ## Common options
 
-All focused benchmarks accept the same lightweight options:
+The wall-clock-sampled focused benchmarks accept the same lightweight options:
 
 ```bash
 --duration seconds   # timed duration per scenario, default 20
@@ -162,6 +162,40 @@ For a quick local comparison while tuning neighbor parameters, shorten the run:
 ```bash
 scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update
 ```
+
+
+### `flock3d_simulation_ticks_benchmark`
+
+Runs deterministic accelerated simulation benchmarks that answer “how long does this machine take to simulate X seconds of boids?” instead of running for X wall-clock seconds. It advances `BoidSimulation::update(dt)` directly in a tight loop, independent of rendering, input polling, progress bars, and the application fixed-timestep accumulator. Warm-up ticks are executed first and excluded from all measured statistics.
+
+Defaults:
+
+- boid counts: `128`, `256`, `512`, `1024`
+- fixed `dt`: `1/60` seconds
+- warm-up: `5` simulated seconds
+- measured duration: `25` simulated seconds
+- repetitions per count: `1`
+- fixed seed: `12345` plus the boid count, reused for each repetition of that count
+
+Columns:
+
+```text
+scenario,boid_count,repetition,seed,dt,warmup_seconds,warmup_ticks,simulated_seconds,measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_per_tick,p95_ms_per_tick,max_ms_per_tick,ticks_per_second,real_time_factor
+```
+
+Run the default accelerated benchmark through the helper script:
+
+```bash
+scripts/run_benchmark.sh simulation_ticks
+```
+
+Run a smoke test that simulates `0.5` warm-up seconds plus `1.0` measured seconds at 60 Hz for two boid counts:
+
+```bash
+scripts/run_benchmark.sh simulation_ticks -- --counts 128,256 --warmup 0.5 --measured 1 --dt 0.0166666667 --repetitions 1
+```
+
+The legacy `--duration` option is accepted as an alias for `--measured` when forwarded by `scripts/run_benchmark.sh`; `--sample` is accepted and ignored because this benchmark emits compact one-row summaries per repetition rather than time-series sample windows.
 
 ### `flock3d_spatial_hash_benchmark`
 
