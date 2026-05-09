@@ -75,6 +75,28 @@
       "configurePreset": "release-ninja"
     },
     {
+      "name": "benchmark",
+      "displayName": "Release benchmark targets",
+      "configurePreset": "release",
+      "targets": [
+        "flock3d_spatial_hash_benchmark",
+        "flock3d_simulation_update_benchmark",
+        "flock3d_metrics_benchmark",
+        "flock3d_noise_benchmark"
+      ]
+    },
+    {
+      "name": "benchmark-ninja",
+      "displayName": "Release benchmark targets (Ninja)",
+      "configurePreset": "release-ninja",
+      "targets": [
+        "flock3d_spatial_hash_benchmark",
+        "flock3d_simulation_update_benchmark",
+        "flock3d_metrics_benchmark",
+        "flock3d_noise_benchmark"
+      ]
+    },
+    {
       "name": "debug-vs2022",
       "configurePreset": "debug-vs2022",
       "configuration": "Debug"
