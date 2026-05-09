@@ -8,6 +8,7 @@
 #include "app/DebugControls.hpp"
 #include "app/SimulationControls.hpp"
 #include <flock3d/app/ControlCommands.hpp>
+#include <flock3d/app/FixedUpdateLoop.hpp>
 #include <flock3d/app/OverlayLayout.hpp>
 #include <flock3d/experiment/MetricsExport.hpp>
 #include "render/BoidRenderer.hpp"
@@ -20,7 +21,7 @@ namespace flock3d::app {
 
 class Application {
 public:
-    Application();
+    explicit Application(FixedUpdateLoopConfig fixed_update_loop_config = {});
     ~Application();
 
     Application(const Application&) = delete;
@@ -37,7 +38,9 @@ private:
     static constexpr std::size_t overlay_line_count = overlay_layout.line_count;
 
     void poll_input_events();
+    void poll_input_events_between_fixed_updates();
     void apply_queued_commands();
+    void update_simulation_step(double fixed_dt);
     [[nodiscard]] bool apply_control_command(const ControlCommand& command);
     void mark_overlay_dirty() noexcept;
     void refresh_overlay_text(float frame_time_ms);
@@ -64,6 +67,7 @@ private:
     sim::ScenarioDefinition active_scenario_{sim::build_scenario(sim::ScenarioType::ClassicBoids)};
     sim::BoidSimulation simulation_{active_scenario_.simulation_parameters};
     sim::FixedTimestepAccumulator timestep_{1.0 / 120.0};
+    FixedUpdateLoopConfig fixed_update_loop_config_{};
     sim::SimulationMetrics metrics_{};
     experiment::MetricsRecorder recorder_{};
     render::BoidRenderer renderer_{};

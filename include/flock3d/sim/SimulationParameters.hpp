@@ -100,6 +100,7 @@ public:
 
     [[nodiscard]] constexpr double fixed_dt() const noexcept { return fixed_dt_; }
     [[nodiscard]] constexpr double accumulated() const noexcept { return accumulator_; }
+    [[nodiscard]] constexpr bool has_step() const noexcept { return accumulator_ >= fixed_dt_; }
 
     constexpr void add_frame_time(double frame_time_seconds) noexcept
     {
@@ -109,7 +110,7 @@ public:
 
     constexpr bool consume_step() noexcept
     {
-        if (accumulator_ < fixed_dt_) {
+        if (!has_step()) {
             return false;
         }
 
