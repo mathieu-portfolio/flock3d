@@ -36,7 +36,7 @@ All focused benchmarks accept the same lightweight options:
 --warmup seconds     # untimed warm-up per scenario, default 1
 ```
 
-CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stdout and stderr are both terminals, keeping redirected CSV files clean.
+CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing progress in your terminal.
 
 Example progress display:
 
