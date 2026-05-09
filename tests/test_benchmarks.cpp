@@ -77,9 +77,29 @@ TEST_CASE("Fixed tick benchmark summary statistics are computed from measured ti
     CHECK(summary.simulated_seconds == Catch::Approx(2.5));
     CHECK(summary.total_wall_seconds == Catch::Approx(0.110));
     CHECK(summary.average_ms_per_tick == Catch::Approx(22.0));
+    CHECK(summary.mean_ns_per_tick == Catch::Approx(22'000'000.0));
     CHECK(summary.p50_ms_per_tick == Catch::Approx(3.0));
     CHECK(summary.p95_ms_per_tick == Catch::Approx(100.0));
     CHECK(summary.max_ms_per_tick == Catch::Approx(100.0));
     CHECK(summary.ticks_per_second == Catch::Approx(5.0 / 0.110));
+    CHECK(summary.updates_per_second == Catch::Approx(summary.ticks_per_second));
     CHECK(summary.real_time_factor == Catch::Approx(2.5 / 0.110));
+}
+
+
+TEST_CASE("Common benchmark update stats report latency and throughput metrics", "[benchmark][common]")
+{
+    flock3d::bench::UpdateStats stats{};
+    for (const double milliseconds : {1.0, 2.0, 3.0, 4.0, 100.0}) {
+        stats.record(milliseconds);
+    }
+
+    CHECK(stats.count == 5U);
+    CHECK(stats.mean_ms() == Catch::Approx(22.0));
+    CHECK(stats.mean_ns() == Catch::Approx(22'000'000.0));
+    CHECK(stats.p50_ms() == Catch::Approx(3.0));
+    CHECK(stats.p95_ms() == Catch::Approx(100.0));
+    CHECK(stats.wall_seconds() == Catch::Approx(0.110));
+    CHECK(stats.ticks_per_second() == Catch::Approx(5.0 / 0.110));
+    CHECK(stats.real_time_factor(0.5) == Catch::Approx(2.5 / 0.110));
 }

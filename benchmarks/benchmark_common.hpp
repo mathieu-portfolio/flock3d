@@ -46,13 +46,15 @@ struct UpdateStats {
     double total_ms{};
     double min_ms{std::numeric_limits<double>::max()};
     double max_ms{};
+    std::vector<double> samples_ms{};
 
-    void record(double milliseconds) noexcept
+    void record(double milliseconds)
     {
         ++count;
         total_ms += milliseconds;
         min_ms = std::min(min_ms, milliseconds);
         max_ms = std::max(max_ms, milliseconds);
+        samples_ms.push_back(milliseconds);
     }
 
     [[nodiscard]] double mean_ms() const noexcept
@@ -60,9 +62,55 @@ struct UpdateStats {
         return count > 0 ? total_ms / static_cast<double>(count) : 0.0;
     }
 
+    [[nodiscard]] double mean_ns() const noexcept
+    {
+        return mean_ms() * 1'000'000.0;
+    }
+
+    [[nodiscard]] double wall_seconds() const noexcept
+    {
+        return total_ms / 1000.0;
+    }
+
+    [[nodiscard]] double ticks_per_second() const noexcept
+    {
+        return wall_seconds() > 0.0 ? static_cast<double>(count) / wall_seconds() : 0.0;
+    }
+
+    [[nodiscard]] double real_time_factor(double dt = fixed_dt_seconds) const noexcept
+    {
+        return wall_seconds() > 0.0 ? (static_cast<double>(count) * dt) / wall_seconds() : 0.0;
+    }
+
     [[nodiscard]] double min_or_zero() const noexcept
     {
         return count > 0 ? min_ms : 0.0;
+    }
+
+    [[nodiscard]] double percentile_ms(double percentile) const
+    {
+        if (samples_ms.empty()) {
+            return 0.0;
+        }
+        auto values = samples_ms;
+        std::sort(values.begin(), values.end());
+        const double clamped = std::clamp(percentile, 0.0, 1.0);
+        if (clamped <= 0.0) {
+            return values.front();
+        }
+        const auto rank = static_cast<std::size_t>(std::ceil(clamped * static_cast<double>(values.size())));
+        const std::size_t index = std::min(values.size() - 1U, rank > 0U ? rank - 1U : 0U);
+        return values[index];
+    }
+
+    [[nodiscard]] double p50_ms() const
+    {
+        return percentile_ms(0.50);
+    }
+
+    [[nodiscard]] double p95_ms() const
+    {
+        return percentile_ms(0.95);
     }
 };
 
@@ -164,8 +212,8 @@ public:
             std::cerr << (index < filled ? '#' : '-');
         }
         std::cerr << "] " << std::setw(3) << percent << "% | " << benchmark << " | " << scenario << " | "
-                  << boid_count << " boids | " << std::fixed << std::setprecision(1) << elapsed << "s / " << target
-                  << 's' << std::flush;
+                  << boid_count << " boids | " << std::fixed << std::setprecision(1) << elapsed << " simulated s / "
+                  << target << " simulated s" << std::flush;
     }
 
     void finish()

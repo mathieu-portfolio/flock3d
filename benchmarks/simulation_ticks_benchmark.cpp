@@ -131,7 +131,7 @@ void print_header()
                  "ticks,simulated_seconds,"
                  "measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_"
                  "per_tick,p95_ms_per_tick,"
-                 "max_ms_per_tick,ticks_per_second,real_time_factor\n";
+                 "max_ms_per_tick,ticks_per_second,real_time_factor,ticks_in_sample,simulated_ticks,wall_seconds,mean_ns_per_tick,updates_per_second\n";
 }
 
 void run_count(std::uint32_t boid_count, const TickBenchmarkOptions &options)
@@ -158,7 +158,9 @@ void run_count(std::uint32_t boid_count, const TickBenchmarkOptions &options)
                   << summary.tick_count << ',' << std::setprecision(6) << summary.total_wall_seconds << ','
                   << summary.average_ms_per_tick << ',' << summary.p50_ms_per_tick << ',' << summary.p95_ms_per_tick
                   << ',' << summary.max_ms_per_tick << ',' << summary.ticks_per_second << ','
-                  << summary.real_time_factor << '\n';
+                  << summary.real_time_factor << ',' << summary.tick_count << ',' << summary.tick_count << ','
+                  << summary.total_wall_seconds << ',' << summary.mean_ns_per_tick << ','
+                  << summary.updates_per_second << '\n';
     }
 }
 

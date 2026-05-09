@@ -22,15 +22,15 @@ class SummarySpec:
 
 
 BENCHMARKS: tuple[SummarySpec, ...] = (
-    SummarySpec("simulation_update", "simulation_update.csv", ("scenario", "model", "neighbor_mode"), "mean_update_ms"),
-    SummarySpec("spatial_hash", "spatial_hash.csv", ("scenario",), "mean_spatial_query_ms"),
-    SummarySpec("metrics", "metrics.csv", ("scenario", "metric_mode"), "mean_update_ms"),
-    SummarySpec("noise", "noise.csv", ("scenario", "noise_mode"), "mean_update_ms"),
+    SummarySpec("simulation_update", "simulation_update.csv", ("scenario", "model", "neighbor_mode"), "mean_ns_per_tick"),
+    SummarySpec("spatial_hash", "spatial_hash.csv", ("scenario",), "mean_spatial_query_ns_per_tick"),
+    SummarySpec("metrics", "metrics.csv", ("scenario", "metric_mode"), "mean_ns_per_tick"),
+    SummarySpec("noise", "noise.csv", ("scenario", "noise_mode"), "mean_ns_per_tick"),
     SummarySpec(
         "simulation_ticks",
         "simulation_ticks.csv",
         ("scenario",),
-        "average_ms_per_tick",
+        "mean_ns_per_tick",
         sample_column="repetition",
         elapsed_column="simulated_seconds",
         iterations_column="measured_ticks",
@@ -44,6 +44,8 @@ OUTPUT_COLUMNS = (
     "boid_count",
     "sample_index",
     "elapsed_seconds",
+    "simulated_seconds",
+    "ticks_in_sample",
     "primary_metric",
     "primary_value",
     "iterations_in_sample",
@@ -134,6 +136,8 @@ def latest_rows(spec: SummarySpec, input_dir: Path) -> list[dict[str, str]]:
                 "boid_count": row.get("boid_count", ""),
                 "sample_index": row.get(spec.sample_column, ""),
                 "elapsed_seconds": row.get(spec.elapsed_column, ""),
+                "simulated_seconds": row.get("simulated_seconds", row.get(spec.elapsed_column, "")),
+                "ticks_in_sample": row.get("ticks_in_sample", row.get(spec.iterations_column, "")),
                 "primary_metric": spec.primary_metric,
                 "primary_value": row.get(spec.primary_metric, ""),
                 "iterations_in_sample": row.get(spec.iterations_column, ""),

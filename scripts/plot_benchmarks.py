@@ -42,9 +42,9 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         name="simulation_update",
         filename="simulation_update.csv",
         group_columns=("scenario", "model", "neighbor_mode"),
-        primary_metric="mean_update_ms",
-        time_metrics=("mean_update_ms",),
-        scaling_metrics=("mean_update_ms", "max_update_ms", "selected_neighbors_mean"),
+        primary_metric="mean_ns_per_tick",
+        time_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "selected_neighbors_mean"),
         diagnostic_metrics=(
             "candidates_per_query",
             "effective_neighbors_per_query",
@@ -56,9 +56,9 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         name="spatial_hash",
         filename="spatial_hash.csv",
         group_columns=("scenario",),
-        primary_metric="mean_spatial_query_ms",
-        time_metrics=("mean_rebuild_ms", "mean_spatial_query_ms", "mean_naive_query_ms"),
-        scaling_metrics=("mean_rebuild_ms", "mean_spatial_query_ms", "mean_naive_query_ms"),
+        primary_metric="mean_spatial_query_ns_per_tick",
+        time_metrics=("mean_rebuild_ns_per_tick", "mean_spatial_query_ns_per_tick", "mean_naive_query_ns_per_tick"),
+        scaling_metrics=("mean_rebuild_ns_per_tick", "mean_spatial_query_ns_per_tick", "mean_naive_query_ns_per_tick"),
         diagnostic_metrics=(
             "candidates_per_query",
             "effective_neighbors_per_query",
@@ -70,25 +70,25 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         name="metrics",
         filename="metrics.csv",
         group_columns=("scenario", "metric_mode"),
-        primary_metric="mean_update_ms",
-        time_metrics=("mean_update_ms",),
-        scaling_metrics=("mean_update_ms", "max_update_ms"),
+        primary_metric="mean_ns_per_tick",
+        time_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second"),
     ),
     BenchmarkSpec(
         name="noise",
         filename="noise.csv",
         group_columns=("scenario", "noise_mode"),
-        primary_metric="mean_update_ms",
-        time_metrics=("mean_update_ms",),
-        scaling_metrics=("mean_update_ms", "max_update_ms"),
+        primary_metric="mean_ns_per_tick",
+        time_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second"),
     ),
     BenchmarkSpec(
         name="simulation_ticks",
         filename="simulation_ticks.csv",
         group_columns=("scenario",),
-        primary_metric="average_ms_per_tick",
-        time_metrics=("average_ms_per_tick", "p95_ms_per_tick", "real_time_factor"),
-        scaling_metrics=("average_ms_per_tick", "p95_ms_per_tick", "real_time_factor"),
+        primary_metric="mean_ns_per_tick",
+        time_metrics=("mean_ns_per_tick", "p95_ms_per_tick", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_ms_per_tick", "ticks_per_second", "real_time_factor"),
         sample_column="repetition",
         elapsed_column="simulated_seconds",
     ),
@@ -173,7 +173,7 @@ def write_summary(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path) ->
         spec.elapsed_column,
         spec.primary_metric,
     ]
-    optional_columns = [column for column in ("iterations_in_sample",) if column in latest.columns]
+    optional_columns = [column for column in ("simulated_seconds", "simulated_ticks", "ticks_in_sample", "iterations_in_sample", "sample_wall_seconds", "total_wall_seconds") if column in latest.columns]
     summary = latest[[*columns, *optional_columns]].copy()
     output_path = output_dir / f"{spec.name}_summary.csv"
     summary.to_csv(output_path, index=False)
@@ -187,8 +187,8 @@ def plot_time_series(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path,
         for _, group in frame.groupby([*spec.group_columns, "boid_count"], dropna=False):
             group = group.sort_values(spec.elapsed_column)
             ax.plot(group[spec.elapsed_column], group[metric], marker="o", linewidth=1.2, label=line_label(group.iloc[0], spec.group_columns))
-        ax.set_title(f"{spec.name}: {metric} over time")
-        ax.set_xlabel(spec.elapsed_column)
+        ax.set_title(f"{spec.name}: {metric} over simulated time")
+        ax.set_xlabel(f"{spec.elapsed_column} (simulated)")
         ax.set_ylabel(metric)
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize="x-small", ncols=2)

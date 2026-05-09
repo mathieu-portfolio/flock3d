@@ -6,7 +6,7 @@ These benchmark executables are for performance diagnosis before optimization. T
 
 Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks therefore use boid counts below 512 by default (`64`, `128`, `256`, and `384`). This keeps runs practical while still making time-series slowdown visible.
 
-Focused benchmarks advance fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
+Focused benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. CSV output therefore makes simulated time (`elapsed_seconds`/`simulated_seconds` and `simulated_ticks`) separate from measured CPU time (`sample_wall_seconds`/`total_wall_seconds`). Prefer `mean_ns_per_tick`, `ticks_per_second`, `updates_per_second`, `ticks_in_sample`, and `real_time_factor` when comparing runs; legacy millisecond columns remain for existing CSV tooling. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
 
 ## Build
 
@@ -41,7 +41,7 @@ CSV is printed to stdout so output is easy to redirect. Progress bars are printe
 Example progress display:
 
 ```text
-[##########----------]  50% | simulation_update | ClassicBoids | 256 boids | 15.0s / 20s
+[##########----------]  50% | simulation_update | ClassicBoids | 256 boids | 15.0 simulated s / 20 simulated s
 ```
 
 ## Suggested first commands
@@ -93,7 +93,7 @@ Generate plots for benchmark CSV files already present under `outputs/benchmarks
 scripts/plot_benchmarks.sh
 ```
 
-The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, elapsed-time plots for timing metrics, and spatial-hash diagnostic plots for candidate counts and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
+The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, simulated-time plots for tick cost/throughput metrics, and spatial-hash diagnostic plots for candidate counts and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
 
 ```bash
 scripts/plot_benchmarks.sh --input-dir outputs/benchmarks/nightly --output-dir outputs/benchmarks/nightly_plots
@@ -148,7 +148,7 @@ Adaptive perception changes which neighbors are sensed before topological select
 Columns:
 
 ```text
-scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,candidates_per_query,effective_neighbors_per_query,exact_separation_neighbors_mean,aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms
+scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,candidates_per_query,effective_neighbors_per_query,exact_separation_neighbors_mean,aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 To compare all neighbor modes directly, including `cell_aggregate_social`, run:
@@ -180,7 +180,7 @@ Defaults:
 Columns:
 
 ```text
-scenario,boid_count,repetition,seed,dt,warmup_seconds,warmup_ticks,simulated_seconds,measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_per_tick,p95_ms_per_tick,max_ms_per_tick,ticks_per_second,real_time_factor
+scenario,boid_count,repetition,seed,dt,warmup_seconds,warmup_ticks,simulated_seconds,measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_per_tick,p95_ms_per_tick,max_ms_per_tick,ticks_per_second,real_time_factor,ticks_in_sample,simulated_ticks,wall_seconds,mean_ns_per_tick,updates_per_second
 ```
 
 Run the default accelerated benchmark through the helper script:
@@ -210,7 +210,7 @@ Measures spatial hash rebuild, spatial neighbor query, and naive neighbor counti
 Columns:
 
 ```text
-scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches
+scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 Use `candidates_per_query`, `effective_neighbors_per_query`, `occupied_cell_count`, `max_cell_occupancy`, and `average_cell_occupancy` to see whether late-run slowdown corresponds to clustering or worsening candidate density. `count_mismatches` should remain `0`; it compares spatial neighbor counts to naive counts for the same positions.
@@ -225,7 +225,7 @@ Measures ClassicBoids update cost with and without a metrics pointer:
 Columns:
 
 ```text
-scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms
+scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 The code currently exposes a null/non-null metrics pointer rather than separate basic/full metric levels, so this benchmark isolates the overhead of enabling the existing metrics path.
@@ -243,11 +243,11 @@ Measures `NoiseExperiment` update cost for deterministic noise combinations:
 Columns:
 
 ```text
-scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength
+scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 This benchmark helps decide whether deterministic noise generation should be optimized before model or spatial-hash changes.
 
 ## Interpreting time-series rows
 
-Rows with the same scenario/model/mode and boid count are ordered by `sample_index`, and `elapsed_seconds` is simulated elapsed time. Inspect how `mean_update_ms`, `max_update_ms`, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.
+Rows with the same scenario/model/mode and boid count are ordered by `sample_index`, and `elapsed_seconds` is simulated elapsed time kept for CSV compatibility. Use `simulated_seconds`/`simulated_ticks` for simulation progress, `ticks_in_sample` for the deterministic work size, `sample_wall_seconds` for measured CPU elapsed time, `mean_ns_per_tick` for per-tick cost, `p50_*`/`p95_*` for stable latency, and `ticks_per_second`/`updates_per_second`/`real_time_factor` for throughput. Inspect how tick cost, p95 latency, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.

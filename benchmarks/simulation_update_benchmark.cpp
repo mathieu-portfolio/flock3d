@@ -59,6 +59,7 @@ void run_scenario(
 
     while (completed_ticks < total_ticks) {
         UpdateStats stats{};
+        stats.samples_ms.reserve(sample_ticks);
         flock3d::sim::SimulationMetrics sample_metrics{};
         const std::size_t sample_start_tick = completed_ticks;
         while (completed_ticks < total_ticks && (stats.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
@@ -75,6 +76,8 @@ void run_scenario(
         }
 
         const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
+        const std::size_t ticks_in_sample = stats.count;
+        const std::size_t simulated_ticks = completed_ticks;
         std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << neighbor_mode.name << ','
                   << (neighbor_mode.adaptive_perception_enabled ? "true" : "false") << ',' << boid_count << ','
                   << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
@@ -87,7 +90,10 @@ void run_scenario(
                   << sample_metrics.polarization << ',' << sample_metrics.cohesion << ','
                   << sample_metrics.nearest_neighbor_average_distance << ',' << sample_metrics.average_speed << ','
                   << stats.mean_ms() << ','
-                  << stats.min_or_zero() << ',' << stats.max_ms << '\n';
+                  << stats.min_or_zero() << ',' << stats.max_ms << ',' << elapsed << ',' << simulated_ticks << ','
+                  << ticks_in_sample << ',' << stats.wall_seconds() << ',' << stats.mean_ns() << ','
+                  << stats.p50_ms() << ',' << stats.p95_ms() << ',' << stats.ticks_per_second() << ','
+                  << stats.ticks_per_second() << ',' << stats.real_time_factor() << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -111,7 +117,7 @@ int main(int argc, char** argv)
                  "iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,"
                  "candidates_per_query,effective_neighbors_per_query,exact_separation_neighbors_mean,"
                  "aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,"
-                 "nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms\n";
+                 "nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const auto model : {
              flock3d::sim::SimulationModel::ClassicBoids,
              flock3d::sim::SimulationModel::BirdFlight,
