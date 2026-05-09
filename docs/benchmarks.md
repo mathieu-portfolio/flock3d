@@ -73,6 +73,40 @@ Use `--preset`, `--output-dir`, or the `FLOCK3D_BENCHMARK_*` environment variabl
 scripts/run_benchmark.sh --preset release-ninja --output-dir outputs/benchmarks/nightly all -- --duration 10
 ```
 
+## Plot benchmark output
+
+Install the same lightweight plotting dependencies used by the experiment scripts:
+
+```bash
+python -m pip install pandas matplotlib
+```
+
+Write a dependency-free latest-sample summary for benchmark CSV files already present under `outputs/benchmarks/`:
+
+```bash
+scripts/summarize_benchmarks.py --markdown
+```
+
+Generate plots for benchmark CSV files already present under `outputs/benchmarks/`:
+
+```bash
+scripts/plot_benchmarks.sh
+```
+
+The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, elapsed-time plots for timing metrics, and spatial-hash diagnostic plots for candidate counts and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
+
+```bash
+scripts/plot_benchmarks.sh --input-dir outputs/benchmarks/nightly --output-dir outputs/benchmarks/nightly_plots
+scripts/plot_benchmarks.sh --benchmarks simulation_update,spatial_hash --format svg
+```
+
+You can also ask the benchmark runner to plot immediately after it writes CSV files:
+
+```bash
+scripts/run_benchmark.sh --duration 1 --sample 0.25 --summary --plot all
+scripts/run_benchmark.sh --plot-arg --format --plot-arg svg spatial_hash
+```
+
 You can still run the executables directly if you need shell-specific redirection:
 
 ```bash
