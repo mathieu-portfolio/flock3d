@@ -6,6 +6,7 @@
 
 #include <raylib.h>
 
+#include <flock3d/sim/NeighborSelection.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 #include <flock3d/sim/SpatialHash3D.hpp>
@@ -64,6 +65,7 @@ private:
     std::vector<Vector3> velocities_;
     std::vector<Vector3> accelerations_;
     std::vector<std::size_t> neighbor_indices_;
+    std::vector<NeighborCandidate> selected_neighbors_;
     std::uint64_t noise_step_{};
 };
 

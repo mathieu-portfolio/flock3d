@@ -12,6 +12,11 @@ struct SimulationMetrics {
     std::uint64_t neighbor_queries{};
     std::uint64_t neighbor_candidates{};
     std::uint64_t neighbor_total{};
+    std::uint64_t selected_neighbors_total{};
+    double effective_radius_total{};
+    std::uint64_t effective_radius_count{};
+    double effective_radius_mean{};
+    double selected_neighbors_mean{};
     double avg_candidates_per_query{};
     std::size_t max_candidates_per_query{};
     double avg_effective_neighbors_per_query{};
@@ -46,6 +51,11 @@ struct SimulationMetrics {
         neighbor_queries = 0;
         neighbor_candidates = 0;
         neighbor_total = 0;
+        selected_neighbors_total = 0;
+        effective_radius_total = 0.0;
+        effective_radius_count = 0;
+        effective_radius_mean = 0.0;
+        selected_neighbors_mean = 0.0;
         avg_candidates_per_query = 0.0;
         max_candidates_per_query = 0;
         avg_effective_neighbors_per_query = 0.0;
@@ -86,7 +96,14 @@ struct SimulationMetrics {
     constexpr void record_effective_neighbors(std::size_t neighbor_count) noexcept
     {
         neighbor_total += neighbor_count;
+        selected_neighbors_total += neighbor_count;
         max_effective_neighbors_per_query = std::max(max_effective_neighbors_per_query, neighbor_count);
+    }
+
+    constexpr void record_effective_radius(float radius) noexcept
+    {
+        effective_radius_total += static_cast<double>(radius);
+        ++effective_radius_count;
     }
 
     constexpr void record_nearest_neighbor_distance(float distance) noexcept
@@ -140,6 +157,12 @@ struct SimulationMetrics {
             : 0.0;
         avg_effective_neighbors_per_query = neighbor_queries > 0
             ? static_cast<double>(neighbor_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        selected_neighbors_mean = neighbor_queries > 0
+            ? static_cast<double>(selected_neighbors_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        effective_radius_mean = effective_radius_count > 0
+            ? effective_radius_total / static_cast<double>(effective_radius_count)
             : 0.0;
         visited_cells_per_query = neighbor_queries > 0
             ? static_cast<double>(visited_cells_total) / static_cast<double>(neighbor_queries)

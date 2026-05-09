@@ -39,10 +39,16 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
     BenchmarkSpec(
         name="simulation_update",
         filename="simulation_update.csv",
-        group_columns=("scenario", "model"),
+        group_columns=("scenario", "model", "neighbor_mode"),
         primary_metric="mean_update_ms",
         time_metrics=("mean_update_ms",),
-        scaling_metrics=("mean_update_ms", "max_update_ms"),
+        scaling_metrics=("mean_update_ms", "max_update_ms", "selected_neighbors_mean"),
+        diagnostic_metrics=(
+            "candidates_per_query",
+            "effective_neighbors_per_query",
+            "effective_radius_mean",
+            "selected_neighbors_mean",
+        ),
     ),
     BenchmarkSpec(
         name="spatial_hash",

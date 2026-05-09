@@ -4,11 +4,13 @@
 #include <cstddef>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 #include <raylib.h>
 
 #include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/NeighborSelection.hpp>
 #include <flock3d/sim/Scenario.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
@@ -114,6 +116,118 @@ TEST_CASE("BoidSimulation clamps velocity to max speed", "[simulation]")
 
     REQUIRE(simulation.velocities().size() == 1);
     CHECK(flock3d::math::length(simulation.velocities().front()) <= 3.0001F);
+}
+
+
+TEST_CASE("Neighbor selection excludes self in fixed-radius uncapped mode", "[simulation][neighbors]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.max_selected_neighbors = 0U;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.neighbor_queries == 1);
+    CHECK(metrics.neighbor_candidates == 1);
+    CHECK(metrics.neighbor_total == 0);
+    CHECK(metrics.selected_neighbors_mean == Catch::Approx(0.0));
+}
+
+TEST_CASE("Neighbor selection respects max_selected_neighbors", "[simulation][neighbors]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.max_selected_neighbors = 2U;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{2.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{3.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.max_effective_neighbors_per_query <= 2U);
+    CHECK(metrics.selected_neighbors_mean == Catch::Approx(2.0));
+}
+
+TEST_CASE("Neighbor selection keeps closest deterministic candidates", "[simulation][neighbors]")
+{
+    std::vector<flock3d::sim::NeighborCandidate> candidates{
+        {4U, 4.0F},
+        {3U, 1.0F},
+        {2U, 1.0F},
+        {1U, 9.0F},
+    };
+
+    flock3d::sim::select_closest_neighbors(candidates, 3U);
+
+    REQUIRE(candidates.size() == 3U);
+    CHECK(candidates[0].boid_index == 2U);
+    CHECK(candidates[1].boid_index == 3U);
+    CHECK(candidates[2].boid_index == 4U);
+}
+
+TEST_CASE("Adaptive perception radius clamps to configured bounds", "[simulation][neighbors]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.base_perception_radius = 10.0F;
+    parameters.min_perception_radius = 5.0F;
+    parameters.max_perception_radius = 15.0F;
+    parameters.target_neighbor_count = 4U;
+    parameters.adaptive_perception_enabled = true;
+
+    CHECK(flock3d::sim::compute_effective_perception_radius(parameters, 100U) == Catch::Approx(5.0F));
+    CHECK(flock3d::sim::compute_effective_perception_radius(parameters, 1U) == Catch::Approx(15.0F));
+}
+
+TEST_CASE("Adaptive perception radius shrinks when local density exceeds target", "[simulation][neighbors]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.base_perception_radius = 10.0F;
+    parameters.min_perception_radius = 1.0F;
+    parameters.max_perception_radius = 20.0F;
+    parameters.target_neighbor_count = 4U;
+    parameters.adaptive_perception_enabled = true;
+
+    CHECK(flock3d::sim::compute_effective_perception_radius(parameters, 16U) == Catch::Approx(5.0F));
+}
+
+TEST_CASE("Adaptive perception radius expands in sparse neighborhoods", "[simulation][neighbors]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.base_perception_radius = 10.0F;
+    parameters.min_perception_radius = 1.0F;
+    parameters.max_perception_radius = 20.0F;
+    parameters.target_neighbor_count = 16U;
+    parameters.adaptive_perception_enabled = true;
+
+    CHECK(flock3d::sim::compute_effective_perception_radius(parameters, 4U) == Catch::Approx(20.0F));
+}
+
+TEST_CASE("Fixed-radius uncapped neighbor mode remains available", "[simulation][neighbors]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.neighbor_radius = 10.0F;
+    parameters.max_selected_neighbors = 0U;
+    parameters.adaptive_perception_enabled = false;
+    flock3d::sim::sync_spatial_cell_size_to_query_radius(parameters);
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{2.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{3.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.max_effective_neighbors_per_query == 3U);
+    CHECK(metrics.avg_effective_neighbors_per_query == Catch::Approx(3.0));
+    CHECK(metrics.effective_radius_mean == Catch::Approx(10.0F));
 }
 
 TEST_CASE("BoidSimulation records neighbor metrics", "[simulation]")

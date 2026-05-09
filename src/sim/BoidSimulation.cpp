@@ -6,6 +6,7 @@
 #include <random>
 
 #include <flock3d/math/Vec3.hpp>
+#include <flock3d/sim/NeighborSelection.hpp>
 
 namespace flock3d::sim {
 namespace {
@@ -43,11 +44,13 @@ void BoidSimulation::reset(std::uint32_t boid_count)
     velocities_.clear();
     accelerations_.clear();
     neighbor_indices_.clear();
+    selected_neighbors_.clear();
     noise_step_ = 0;
     positions_.reserve(boid_count);
     velocities_.reserve(boid_count);
     accelerations_.reserve(boid_count);
     neighbor_indices_.reserve(boid_count);
+    selected_neighbors_.reserve(boid_count);
     spawn_random(boid_count);
 }
 
@@ -154,7 +157,7 @@ void BoidSimulation::update_noise_experiment(float dt, SimulationMetrics* metric
 void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
 {
     const float query_radius = effective_query_radius(parameters_);
-    const float neighbor_radius_squared = parameters_.neighbor_radius * parameters_.neighbor_radius;
+    const float perception_radius = base_perception_radius(parameters_);
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
     const bool noise_active = behavior.apply_noise && parameters_.noise_enabled;
     const std::uint64_t noise_step = noise_step_;
@@ -168,14 +171,14 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             metrics->record_neighbor_query(query_diagnostics.candidates_tested, query_diagnostics.visited_cells);
         }
 
-        Vector3 separation_sum{};
-        Vector3 alignment_sum{};
-        Vector3 cohesion_sum{};
-        std::size_t separation_count = 0;
-        std::size_t flock_count = 0;
-        float nearest_neighbor_distance_squared = 0.0F;
-        bool has_nearest_neighbor = false;
+        const auto local_candidate_count = static_cast<std::size_t>(std::count_if(
+            neighbor_indices_.begin(),
+            neighbor_indices_.end(),
+            [i](std::size_t neighbor_index) noexcept { return neighbor_index != i; }));
+        const float effective_perception_radius = compute_effective_perception_radius(parameters_, local_candidate_count);
+        const float effective_perception_radius_squared = effective_perception_radius * effective_perception_radius;
 
+        selected_neighbors_.clear();
         for (const std::size_t neighbor_index : neighbor_indices_) {
             if (neighbor_index == i) {
                 continue;
@@ -191,12 +194,37 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                     offset,
                     math::scale(
                         deterministic_noise_vector(i, channel, noise_step),
-                        parameters_.perception_noise_strength * parameters_.neighbor_radius));
+                        parameters_.perception_noise_strength * perception_radius));
             }
             const float distance_squared = math::length_squared(offset);
-            if (distance_squared <= 0.000001F) {
+            if (distance_squared <= 0.000001F || distance_squared > effective_perception_radius_squared) {
                 continue;
             }
+
+            selected_neighbors_.push_back(NeighborCandidate{neighbor_index, distance_squared});
+        }
+        select_closest_neighbors(selected_neighbors_, parameters_.max_selected_neighbors);
+
+        Vector3 separation_sum{};
+        Vector3 alignment_sum{};
+        Vector3 cohesion_sum{};
+        std::size_t separation_count = 0;
+        std::size_t flock_count = 0;
+        float nearest_neighbor_distance_squared = 0.0F;
+        bool has_nearest_neighbor = false;
+
+        for (const NeighborCandidate& neighbor : selected_neighbors_) {
+            const std::size_t neighbor_index = neighbor.boid_index;
+            Vector3 offset = math::subtract(positions_[neighbor_index], position);
+            if (noise_active && parameters_.perception_noise_strength > 0.0F) {
+                const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 1U);
+                offset = math::add(
+                    offset,
+                    math::scale(
+                        deterministic_noise_vector(i, channel, noise_step),
+                        parameters_.perception_noise_strength * perception_radius));
+            }
+            const float distance_squared = neighbor.distance_squared;
 
             if (!has_nearest_neighbor || distance_squared < nearest_neighbor_distance_squared) {
                 nearest_neighbor_distance_squared = distance_squared;
@@ -209,20 +237,18 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                 ++separation_count;
             }
 
-            if (distance_squared <= neighbor_radius_squared) {
-                Vector3 perceived_velocity = velocities_[neighbor_index];
-                if (noise_active && parameters_.perception_noise_strength > 0.0F) {
-                    const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 2U);
-                    perceived_velocity = math::add(
-                        perceived_velocity,
-                        math::scale(
-                            deterministic_noise_vector(i, channel, noise_step),
-                            parameters_.perception_noise_strength * parameters_.max_speed));
-                }
-                alignment_sum = math::add(alignment_sum, perceived_velocity);
-                cohesion_sum = math::add(cohesion_sum, math::add(position, offset));
-                ++flock_count;
+            Vector3 perceived_velocity = velocities_[neighbor_index];
+            if (noise_active && parameters_.perception_noise_strength > 0.0F) {
+                const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 2U);
+                perceived_velocity = math::add(
+                    perceived_velocity,
+                    math::scale(
+                        deterministic_noise_vector(i, channel, noise_step),
+                        parameters_.perception_noise_strength * parameters_.max_speed));
             }
+            alignment_sum = math::add(alignment_sum, perceived_velocity);
+            cohesion_sum = math::add(cohesion_sum, math::add(position, offset));
+            ++flock_count;
         }
 
         Vector3 acceleration{};
@@ -234,6 +260,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         }
 
         if (metrics != nullptr) {
+            metrics->record_effective_radius(effective_perception_radius);
             metrics->record_effective_neighbors(flock_count);
             if (has_nearest_neighbor) {
                 metrics->record_nearest_neighbor_distance(std::sqrt(nearest_neighbor_distance_squared));
@@ -311,6 +338,7 @@ void BoidSimulation::add_boid(Vector3 position, Vector3 velocity)
 
     if (neighbor_indices_.capacity() < positions_.size()) {
         neighbor_indices_.reserve(positions_.size());
+        selected_neighbors_.reserve(positions_.size());
     }
 }
 

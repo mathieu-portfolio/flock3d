@@ -129,17 +129,37 @@ mkdir -p outputs/benchmarks
 
 ### `flock3d_simulation_update_benchmark`
 
-Measures total `BoidSimulation::update` cost with metrics disabled for these models:
+Measures total `BoidSimulation::update` cost for these models while collecting the neighbor diagnostics needed to compare bounded and unbounded neighbor processing:
 
 - `ClassicBoids`
 - `BirdFlight`
 - `FishSchool`
 - `NoiseExperiment`
 
+The benchmark runs three neighbor modes for each model and boid count:
+
+- `fixed_radius_uncapped`: classic metric-neighbor behavior. Every visible boid inside the fixed perception radius contributes to alignment, cohesion, and separation. This is the fixed-radius baseline and remains available for regression comparisons.
+- `fixed_radius_closest_k`: fixed metric perception radius, followed by deterministic closest-K topological selection. Candidates are ordered by squared distance with boid index as the tie-breaker, and only `max_selected_neighbors` are used for steering.
+- `adaptive_radius_closest_k`: first queries a broad perception range, estimates local density, adapts the effective radius, then applies closest-K selection. The radius formula is `base_perception_radius * sqrt(target_neighbor_count / max(local_candidate_count, 1))`, clamped between `min_perception_radius` and `max_perception_radius`. Dense neighborhoods shrink toward the minimum; sparse neighborhoods expand toward the maximum.
+
+Adaptive perception changes which neighbors are sensed before topological selection. Adaptive separation is intentionally **not** part of this refactor; separation continues to use the selected-neighbor list and the existing fixed `separation_radius` gate.
+
 Columns:
 
 ```text
-scenario,model,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms
+scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,candidates_per_query,effective_neighbors_per_query,mean_update_ms,min_update_ms,max_update_ms
+```
+
+To compare the three neighbor modes directly, run:
+
+```bash
+scripts/run_benchmark.sh simulation_update
+```
+
+For a quick local comparison while tuning neighbor parameters, shorten the run:
+
+```bash
+scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update
 ```
 
 ### `flock3d_spatial_hash_benchmark`
