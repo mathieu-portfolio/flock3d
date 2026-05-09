@@ -43,10 +43,12 @@ struct TickSummary
     double simulated_seconds{};
     double total_wall_seconds{};
     double average_ms_per_tick{};
+    double mean_ns_per_tick{};
     double p50_ms_per_tick{};
     double p95_ms_per_tick{};
     double max_ms_per_tick{};
     double ticks_per_second{};
+    double updates_per_second{};
     double real_time_factor{};
 };
 
@@ -100,17 +102,20 @@ struct TickSummary
     }
 
     summary.average_ms_per_tick = total_ms / static_cast<double>(summary.tick_count);
+    summary.mean_ns_per_tick = summary.average_ms_per_tick * 1'000'000.0;
     summary.p50_ms_per_tick = percentile_nearest_rank(measured_tick_ms, 0.50);
     summary.p95_ms_per_tick = percentile_nearest_rank(measured_tick_ms, 0.95);
     summary.max_ms_per_tick = *std::max_element(measured_tick_ms.begin(), measured_tick_ms.end());
     if (summary.total_wall_seconds > 0.0)
     {
         summary.ticks_per_second = static_cast<double>(summary.tick_count) / summary.total_wall_seconds;
+        summary.updates_per_second = summary.ticks_per_second;
         summary.real_time_factor = summary.simulated_seconds / summary.total_wall_seconds;
     }
     else
     {
         summary.ticks_per_second = std::numeric_limits<double>::infinity();
+        summary.updates_per_second = std::numeric_limits<double>::infinity();
         summary.real_time_factor = std::numeric_limits<double>::infinity();
     }
     return summary;
