@@ -60,7 +60,7 @@ struct TickSummary
     {
         return 0U;
     }
-    return static_cast<std::size_t>(std::llround(seconds / dt));
+    return static_cast<std::size_t>(std::ceil(seconds / dt));
 }
 
 [[nodiscard]] inline double percentile_nearest_rank(std::vector<double> values, double percentile)
