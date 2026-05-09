@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <flock3d/app/ControlCommands.hpp>
 #include <flock3d/app/ControlHelpers.hpp>
 #include <flock3d/app/OverlayLayout.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
@@ -43,4 +44,36 @@ TEST_CASE("Radius tuning keeps spatial cells aligned with query radius", "[contr
     flock3d::app::adjust_parameter(parameters, flock3d::app::TunableParameter::separation_radius, 1);
     CHECK(parameters.separation_radius == 4.75F);
     CHECK(parameters.spatial_cell_size == 4.75F);
+}
+
+TEST_CASE("Control command queue drains commands in input order", "[controls]")
+{
+    flock3d::app::ControlCommandQueue commands{};
+    commands.enqueue(flock3d::app::ControlCommand::toggle_pause());
+    commands.enqueue(flock3d::app::ControlCommand::adjust_boid_count(128));
+    commands.enqueue(flock3d::app::ControlCommand::adjust_selected_parameter(-1));
+
+    const auto drained = commands.drain();
+
+    REQUIRE(drained.size() == 3);
+    CHECK(drained[0].type == flock3d::app::ControlCommandType::TogglePause);
+    CHECK(drained[1].type == flock3d::app::ControlCommandType::AdjustBoidCount);
+    CHECK(drained[1].amount == 128);
+    CHECK(drained[2].type == flock3d::app::ControlCommandType::AdjustSelectedParameter);
+    CHECK(drained[2].amount == -1);
+    CHECK(commands.empty());
+}
+
+TEST_CASE("Control command queue supports frame boundary batching", "[controls]")
+{
+    flock3d::app::ControlCommandQueue commands{};
+    commands.enqueue(flock3d::app::ControlCommand::select_parameter(flock3d::app::TunableParameter::max_speed));
+
+    const auto first_frame = commands.drain();
+    const auto second_frame = commands.drain();
+
+    REQUIRE(first_frame.size() == 1);
+    CHECK(first_frame.front().type == flock3d::app::ControlCommandType::SelectParameter);
+    CHECK(first_frame.front().parameter == flock3d::app::TunableParameter::max_speed);
+    CHECK(second_frame.empty());
 }

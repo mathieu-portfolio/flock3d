@@ -1,25 +1,21 @@
 #pragma once
 
-#include <flock3d/app/ControlHelpers.hpp>
-#include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/app/ControlCommands.hpp>
 
 namespace flock3d::app {
 
-struct SimulationControlResult {
-    bool changed{};
-    bool reset{};
-};
-
 class SimulationControls {
 public:
-    SimulationControlResult handle_input(sim::BoidSimulation& simulation, bool& paused);
-    void reset(sim::BoidSimulation& simulation) const;
+    bool handle_input(ControlCommandQueue& commands) const;
 
     [[nodiscard]] TunableParameter selected_parameter() const noexcept { return selected_parameter_; }
+    void select_parameter(TunableParameter parameter) noexcept { selected_parameter_ = parameter; }
+    void offset_selected_parameter(int direction) noexcept
+    {
+        selected_parameter_ = offset_parameter(selected_parameter_, direction);
+    }
 
 private:
-    void adjust_boid_count(sim::BoidSimulation& simulation, int delta) const;
-
     TunableParameter selected_parameter_{TunableParameter::separation_weight};
 };
 

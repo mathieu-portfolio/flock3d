@@ -4,13 +4,13 @@
 
 namespace flock3d::app {
 
-bool DebugControls::handle_input(bool& show_overlay) const
+bool DebugControls::handle_input(ControlCommandQueue& commands) const
 {
     if (!IsKeyPressed(KEY_F1)) {
         return false;
     }
 
-    show_overlay = !show_overlay;
+    commands.enqueue(ControlCommand::toggle_overlay());
     return true;
 }
 

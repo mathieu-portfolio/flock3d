@@ -1,7 +1,5 @@
 #include "app/SimulationControls.hpp"
 
-#include <algorithm>
-
 #include <raylib.h>
 
 namespace flock3d::app {
@@ -38,64 +36,49 @@ namespace {
 
 } // namespace
 
-SimulationControlResult SimulationControls::handle_input(sim::BoidSimulation& simulation, bool& paused)
+bool SimulationControls::handle_input(ControlCommandQueue& commands) const
 {
-    SimulationControlResult result{};
+    bool queued = false;
 
     if (IsKeyPressed(KEY_P)) {
-        paused = !paused;
-        result.changed = true;
+        commands.enqueue(ControlCommand::toggle_pause());
+        queued = true;
     }
     if (IsKeyPressed(KEY_R)) {
-        reset(simulation);
-        result.changed = true;
-        result.reset = true;
+        commands.enqueue(ControlCommand::reset_simulation());
+        queued = true;
     }
     if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) {
-        adjust_boid_count(simulation, 128);
-        result.changed = true;
+        commands.enqueue(ControlCommand::adjust_boid_count(128));
+        queued = true;
     }
     if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) {
-        adjust_boid_count(simulation, -128);
-        result.changed = true;
+        commands.enqueue(ControlCommand::adjust_boid_count(-128));
+        queued = true;
     }
 
     const int selected_index = selected_parameter_index_from_keyboard();
     if (selected_index >= 0) {
-        selected_parameter_ = parameter_from_index(static_cast<std::size_t>(selected_index));
-        result.changed = true;
+        commands.enqueue(ControlCommand::select_parameter(
+            parameter_from_index(static_cast<std::size_t>(selected_index))));
+        queued = true;
     }
     if (IsKeyPressed(KEY_TAB)) {
         const int direction = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? -1 : 1;
-        selected_parameter_ = offset_parameter(selected_parameter_, direction);
-        result.changed = true;
+        commands.enqueue(ControlCommand::offset_selected_parameter(direction));
+        queued = true;
     }
 
-    auto& parameters = simulation.parameters();
     if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_LEFT_BRACKET)) {
-        adjust_parameter(parameters, selected_parameter_, -1);
-        result.changed = true;
+        commands.enqueue(ControlCommand::adjust_selected_parameter(-1));
+        queued = true;
     }
     if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_RIGHT_BRACKET)) {
-        adjust_parameter(parameters, selected_parameter_, 1);
-        result.changed = true;
+        commands.enqueue(ControlCommand::adjust_selected_parameter(1));
+        queued = true;
     }
 
-    return result;
-}
-
-void SimulationControls::reset(sim::BoidSimulation& simulation) const
-{
-    simulation.reset(simulation.parameters().boid_count);
-}
-
-void SimulationControls::adjust_boid_count(sim::BoidSimulation& simulation, int delta) const
-{
-    auto& parameters = simulation.parameters();
-    const auto current = static_cast<int>(simulation.size());
-    const auto next = std::clamp(current + delta, 0, 100'000);
-    parameters.boid_count = static_cast<unsigned int>(next);
-    simulation.reset(parameters.boid_count);
+    return queued;
 }
 
 } // namespace flock3d::app
