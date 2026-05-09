@@ -12,6 +12,9 @@ sample="${FLOCK3D_BENCHMARK_SAMPLE:-}"
 warmup="${FLOCK3D_BENCHMARK_WARMUP:-}"
 clean=false
 skip_build=false
+plot=false
+summary=false
+plot_args=()
 selection="all"
 
 benchmarks=(
@@ -52,6 +55,9 @@ Options:
   --warmup SECONDS      Untimed warm-up per scenario, forwarded to benchmarks
   --clean               Remove build/<preset> before configuring
   --skip-build          Run existing benchmark binaries without rebuilding
+  --summary             Write a compact latest-sample summary CSV after benchmarks run
+  --plot                Generate benchmark plots after CSV files are written
+  --plot-arg ARG        Extra argument forwarded to scripts/plot_benchmarks.py
   --list                Print benchmark names and exit
   -h, --help            Show this help
 
@@ -64,6 +70,7 @@ Examples:
   scripts/run_benchmark.sh
   scripts/run_benchmark.sh --duration 0.2 --sample 0.1 --warmup 0 simulation_update
   scripts/run_benchmark.sh --preset release-ninja spatial_hash -- --duration 10
+  scripts/run_benchmark.sh --duration 1 --sample 0.25 --summary --plot all
 USAGE
 }
 
@@ -101,6 +108,18 @@ while [[ $# -gt 0 ]]; do
         --skip-build)
             skip_build=true
             shift
+            ;;
+        --summary)
+            summary=true
+            shift
+            ;;
+        --plot)
+            plot=true
+            shift
+            ;;
+        --plot-arg)
+            plot_args+=("${2:?--plot-arg requires a value}")
+            shift 2
             ;;
         --list)
             list_benchmarks
@@ -194,3 +213,19 @@ for benchmark in "${selected[@]}"; do
 done
 
 printf 'Benchmark CSV files written to %s\n' "${output_dir}" >&2
+
+if [[ "${summary}" == true ]]; then
+    summary_args=(--input-dir "${output_dir}" --output "${output_dir}/benchmark_summary.csv")
+    if [[ "${selection}" != "all" ]]; then
+        summary_args+=(--benchmarks "${selection}")
+    fi
+    scripts/summarize_benchmarks.py "${summary_args[@]}"
+fi
+
+if [[ "${plot}" == true ]]; then
+    benchmark_selection="${selection}"
+    if [[ "${benchmark_selection}" != "all" ]]; then
+        plot_args+=(--benchmarks "${benchmark_selection}")
+    fi
+    scripts/plot_benchmarks.sh --input-dir "${output_dir}" "${plot_args[@]}"
+fi
