@@ -771,3 +771,54 @@ TEST_CASE("FishSchool scenario produces resistive-medium defaults", "[scenario][
     CHECK(parameters.max_turn_rate > 0.0F);
     CHECK(parameters.max_speed < flock3d::sim::SimulationParameters{}.max_speed);
 }
+
+TEST_CASE("Cell aggregate social mode uses exact separation without self", "[simulation][neighbors][aggregates]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.neighbor_mode = flock3d::sim::NeighborMode::CellAggregateSocial;
+    parameters.separation_weight = 1.0F;
+    parameters.alignment_weight = 0.0F;
+    parameters.cohesion_weight = 0.0F;
+    parameters.separation_radius = 2.0F;
+    flock3d::sim::sync_spatial_cell_size_to_query_radius(parameters);
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.exact_separation_neighbors_mean == Catch::Approx(0.0));
+    CHECK(metrics.neighbor_total == 0U);
+}
+
+TEST_CASE("Cell aggregate social mode remains deterministic", "[simulation][neighbors][aggregates]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.neighbor_mode = flock3d::sim::NeighborMode::CellAggregateSocial;
+    parameters.boid_count = 12U;
+    parameters.random_seed = 42U;
+    parameters.alignment_weight = 1.0F;
+    parameters.cohesion_weight = 1.0F;
+    parameters.separation_weight = 1.0F;
+
+    flock3d::sim::BoidSimulation lhs{parameters};
+    flock3d::sim::BoidSimulation rhs{parameters};
+    flock3d::sim::SimulationMetrics lhs_metrics{};
+    flock3d::sim::SimulationMetrics rhs_metrics{};
+
+    run_steps(lhs, 8, lhs_metrics);
+    run_steps(rhs, 8, rhs_metrics);
+
+    CHECK(trajectory_distance(lhs, rhs) == Catch::Approx(0.0));
+    CHECK(lhs_metrics.aggregate_cells_used_mean == Catch::Approx(rhs_metrics.aggregate_cells_used_mean));
+    CHECK(lhs_metrics.social_weight_sum_mean == Catch::Approx(rhs_metrics.social_weight_sum_mean));
+}
+
+TEST_CASE("All neighbor modes remain available", "[simulation][neighbors]")
+{
+    CHECK(static_cast<int>(flock3d::sim::NeighborMode::FixedRadiusUncapped) == 0);
+    CHECK(static_cast<int>(flock3d::sim::NeighborMode::FixedRadiusClosestK) == 1);
+    CHECK(static_cast<int>(flock3d::sim::NeighborMode::AdaptiveRadiusClosestK) == 2);
+    CHECK(static_cast<int>(flock3d::sim::NeighborMode::CellAggregateSocial) == 3);
+}

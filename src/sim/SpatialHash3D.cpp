@@ -37,9 +37,18 @@ void SpatialHash3D::clear()
     cells_.clear();
 }
 
-void SpatialHash3D::insert(std::size_t boid_index, Vector3 position)
+void SpatialHash3D::insert(std::size_t boid_index, Vector3 position, Vector3 velocity)
 {
-    cells_[cell_for(position)].push_back(Entry{boid_index, position});
+    const CellCoord coord = cell_for(position);
+    Cell& cell = cells_[coord];
+    cell.entries.push_back(Entry{boid_index, position});
+    cell.aggregate.coord = coord;
+    ++cell.aggregate.count;
+    cell.aggregate.sum_position = math::add(cell.aggregate.sum_position, position);
+    cell.aggregate.sum_velocity = math::add(cell.aggregate.sum_velocity, velocity);
+    const float inverse_count = 1.0F / static_cast<float>(cell.aggregate.count);
+    cell.aggregate.centroid = math::scale(cell.aggregate.sum_position, inverse_count);
+    cell.aggregate.average_velocity = math::scale(cell.aggregate.sum_velocity, inverse_count);
 }
 
 std::vector<std::size_t> SpatialHash3D::query_neighbors(Vector3 position, float radius) const
@@ -80,8 +89,8 @@ void SpatialHash3D::query_neighbors(
                     continue;
                 }
 
-                diagnostics.candidates_tested += found->second.size();
-                for (const Entry& entry : found->second) {
+                diagnostics.candidates_tested += found->second.entries.size();
+                for (const Entry& entry : found->second.entries) {
                     const auto offset = math::subtract(entry.position, position);
                     if (math::length_squared(offset) <= radius_squared) {
                         result.push_back(entry.boid_index);
@@ -92,11 +101,69 @@ void SpatialHash3D::query_neighbors(
     }
 }
 
+std::vector<CellAggregate> SpatialHash3D::query_cell_aggregates(Vector3 position, float radius) const
+{
+    std::vector<CellAggregate> result;
+    query_cell_aggregates(position, radius, result);
+    return result;
+}
+
+void SpatialHash3D::query_cell_aggregates(Vector3 position, float radius, std::vector<CellAggregate>& result) const
+{
+    NeighborQueryDiagnostics diagnostics{};
+    query_cell_aggregates(position, radius, result, diagnostics);
+}
+
+void SpatialHash3D::query_cell_aggregates(
+    Vector3 position,
+    float radius,
+    std::vector<CellAggregate>& result,
+    NeighborQueryDiagnostics& diagnostics) const
+{
+    result.clear();
+    diagnostics = NeighborQueryDiagnostics{};
+    if (radius < 0.0F) {
+        return;
+    }
+
+    const auto center = cell_for(position);
+    const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
+    const float radius_squared = radius * radius;
+
+    for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
+        for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
+            for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
+                ++diagnostics.visited_cells;
+                const auto found = cells_.find(CellCoord{x, y, z});
+                if (found == cells_.end()) {
+                    continue;
+                }
+
+                ++diagnostics.candidates_tested;
+                const CellAggregate& aggregate = found->second.aggregate;
+                const auto offset = math::subtract(aggregate.centroid, position);
+                if (math::length_squared(offset) <= radius_squared) {
+                    result.push_back(aggregate);
+                }
+            }
+        }
+    }
+}
+
+const CellAggregate* SpatialHash3D::aggregate_for(CellCoord coord) const noexcept
+{
+    const auto found = cells_.find(coord);
+    if (found == cells_.end()) {
+        return nullptr;
+    }
+    return &found->second.aggregate;
+}
+
 std::size_t SpatialHash3D::max_cell_occupancy() const noexcept
 {
     std::size_t maximum = 0;
     for (const auto& cell : cells_) {
-        maximum = std::max(maximum, cell.second.size());
+        maximum = std::max(maximum, cell.second.entries.size());
     }
     return maximum;
 }
@@ -110,7 +177,7 @@ std::size_t SpatialHash3D::total_entries() const noexcept
 {
     std::size_t total = 0;
     for (const auto& cell : cells_) {
-        total += cell.second.size();
+        total += cell.second.entries.size();
     }
     return total;
 }

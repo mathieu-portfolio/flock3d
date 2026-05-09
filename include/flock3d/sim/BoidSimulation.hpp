@@ -46,6 +46,8 @@ private:
     void update_fish_school(float dt, SimulationMetrics* metrics);
     void update_noise_experiment(float dt, SimulationMetrics* metrics);
     void update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior);
+    void update_cell_aggregate_social(float dt, SimulationMetrics* metrics, ModelBehavior behavior);
+    void integrate(float dt, ModelBehavior behavior, bool noise_active, std::uint64_t noise_step);
     void spawn_random(std::uint32_t boid_count);
     void wrap_position(Vector3& position) const noexcept;
     void rebuild_spatial_hash();
@@ -66,6 +68,7 @@ private:
     std::vector<Vector3> accelerations_;
     std::vector<std::size_t> neighbor_indices_;
     std::vector<NeighborCandidate> selected_neighbors_;
+    std::vector<CellAggregate> aggregate_cells_;
     std::uint64_t noise_step_{};
 };
 

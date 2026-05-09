@@ -45,12 +45,14 @@ void BoidSimulation::reset(std::uint32_t boid_count)
     accelerations_.clear();
     neighbor_indices_.clear();
     selected_neighbors_.clear();
+    aggregate_cells_.clear();
     noise_step_ = 0;
     positions_.reserve(boid_count);
     velocities_.reserve(boid_count);
     accelerations_.reserve(boid_count);
     neighbor_indices_.reserve(boid_count);
     selected_neighbors_.reserve(boid_count);
+    aggregate_cells_.reserve(boid_count);
     spawn_random(boid_count);
 }
 
@@ -156,6 +158,10 @@ void BoidSimulation::update_noise_experiment(float dt, SimulationMetrics* metric
 
 void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
 {
+    if (parameters_.neighbor_mode == NeighborMode::CellAggregateSocial) {
+        update_cell_aggregate_social(dt, metrics, behavior);
+        return;
+    }
     const float query_radius = effective_query_radius(parameters_);
     const float perception_radius = base_perception_radius(parameters_);
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
@@ -294,6 +300,136 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
     }
 
+    integrate(dt, behavior, noise_active, noise_step);
+}
+
+void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
+{
+    const float social_radius = base_perception_radius(parameters_);
+    const float social_radius_squared = social_radius * social_radius;
+    const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
+    const bool noise_active = behavior.apply_noise && parameters_.noise_enabled;
+    const std::uint64_t noise_step = noise_step_;
+
+    for (std::size_t i = 0; i < positions_.size(); ++i) {
+        const Vector3 position = positions_[i];
+        const Vector3 velocity = velocities_[i];
+
+        NeighborQueryDiagnostics separation_diagnostics{};
+        spatial_hash_.query_neighbors(position, parameters_.separation_radius, neighbor_indices_, separation_diagnostics);
+        if (metrics != nullptr) {
+            metrics->record_neighbor_query(separation_diagnostics.candidates_tested, separation_diagnostics.visited_cells);
+        }
+
+        Vector3 separation_sum{};
+        std::size_t separation_count = 0;
+        float nearest_neighbor_distance_squared = 0.0F;
+        bool has_nearest_neighbor = false;
+        for (const std::size_t neighbor_index : neighbor_indices_) {
+            if (neighbor_index == i) {
+                continue;
+            }
+            const Vector3 offset = math::subtract(positions_[neighbor_index], position);
+            const float distance_squared = math::length_squared(offset);
+            if (distance_squared <= 0.000001F || distance_squared > separation_radius_squared) {
+                continue;
+            }
+            if (!has_nearest_neighbor || distance_squared < nearest_neighbor_distance_squared) {
+                nearest_neighbor_distance_squared = distance_squared;
+                has_nearest_neighbor = true;
+            }
+            const float distance = std::sqrt(distance_squared);
+            separation_sum = math::add(separation_sum, math::scale(offset, -1.0F / distance));
+            ++separation_count;
+        }
+
+        NeighborQueryDiagnostics aggregate_diagnostics{};
+        spatial_hash_.query_cell_aggregates(position, social_radius, aggregate_cells_, aggregate_diagnostics);
+
+        Vector3 weighted_velocity_sum{};
+        Vector3 weighted_centroid_sum{};
+        double social_weight_sum = 0.0;
+        std::size_t aggregate_cells_used = 0;
+        const CellCoord own_cell = spatial_hash_.cell_for(position);
+        for (CellAggregate aggregate : aggregate_cells_) {
+            if (aggregate.coord == own_cell) {
+                if (aggregate.count <= 1U) {
+                    continue;
+                }
+                --aggregate.count;
+                aggregate.sum_position = math::subtract(aggregate.sum_position, position);
+                aggregate.sum_velocity = math::subtract(aggregate.sum_velocity, velocity);
+                const float inverse_count = 1.0F / static_cast<float>(aggregate.count);
+                aggregate.centroid = math::scale(aggregate.sum_position, inverse_count);
+                aggregate.average_velocity = math::scale(aggregate.sum_velocity, inverse_count);
+            }
+
+            const Vector3 offset = math::subtract(aggregate.centroid, position);
+            const float distance_squared = math::length_squared(offset);
+            if (distance_squared <= 0.000001F || distance_squared > social_radius_squared) {
+                continue;
+            }
+            if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
+                continue;
+            }
+
+            const float weight = static_cast<float>(aggregate.count);
+            weighted_centroid_sum = math::add(weighted_centroid_sum, math::scale(aggregate.centroid, weight));
+            weighted_velocity_sum = math::add(weighted_velocity_sum, math::scale(aggregate.average_velocity, weight));
+            social_weight_sum += static_cast<double>(weight);
+            ++aggregate_cells_used;
+        }
+
+        Vector3 acceleration{};
+        if (separation_count > 0) {
+            const Vector3 average = math::scale(separation_sum, 1.0F / static_cast<float>(separation_count));
+            const Vector3 desired = math::scale(math::normalize_safe(average), parameters_.max_speed);
+            const Vector3 steering = math::clamp_length(math::subtract(desired, velocity), parameters_.max_force);
+            acceleration = math::add(acceleration, math::scale(steering, parameters_.separation_weight));
+        }
+
+        if (metrics != nullptr) {
+            metrics->record_effective_radius(social_radius);
+            metrics->record_effective_neighbors(static_cast<std::size_t>(social_weight_sum));
+            metrics->record_cell_aggregate_social(separation_count, aggregate_cells_used, social_weight_sum);
+            if (has_nearest_neighbor) {
+                metrics->record_nearest_neighbor_distance(std::sqrt(nearest_neighbor_distance_squared));
+            }
+        }
+
+        if (social_weight_sum > 0.0) {
+            const float inverse_weight = 1.0F / static_cast<float>(social_weight_sum);
+            const Vector3 average_velocity = math::scale(weighted_velocity_sum, inverse_weight);
+            const Vector3 desired = math::scale(math::normalize_safe(average_velocity), parameters_.max_speed);
+            const Vector3 steering = math::clamp_length(math::subtract(desired, velocity), parameters_.max_force);
+            acceleration = math::add(acceleration, math::scale(steering, parameters_.alignment_weight));
+
+            const Vector3 center = math::scale(weighted_centroid_sum, inverse_weight);
+            acceleration = math::add(acceleration, math::scale(seek(position, velocity, center), parameters_.cohesion_weight));
+        }
+
+        if (behavior.add_bird_altitude_acceleration) {
+            acceleration = math::add(acceleration, bird_altitude_acceleration(position));
+        }
+        if (behavior.add_fish_medium_acceleration) {
+            acceleration = math::add(acceleration, fish_medium_acceleration(position, velocity));
+        }
+        if (noise_active && parameters_.steering_noise_strength > 0.0F) {
+            acceleration = math::add(
+                acceleration,
+                math::scale(
+                    deterministic_noise_vector(i, 10'001U, noise_step),
+                    parameters_.steering_noise_strength * parameters_.max_force));
+        }
+
+        accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
+    }
+
+    integrate(dt, behavior, noise_active, noise_step);
+}
+
+void BoidSimulation::integrate(float dt, ModelBehavior behavior, bool noise_active, std::uint64_t noise_step)
+{
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 previous_velocity = velocities_[i];
         Vector3 desired_velocity = math::add(previous_velocity, math::scale(accelerations_[i], dt));
@@ -339,6 +475,7 @@ void BoidSimulation::add_boid(Vector3 position, Vector3 velocity)
     if (neighbor_indices_.capacity() < positions_.size()) {
         neighbor_indices_.reserve(positions_.size());
         selected_neighbors_.reserve(positions_.size());
+        aggregate_cells_.reserve(positions_.size());
     }
 }
 
@@ -477,7 +614,7 @@ void BoidSimulation::rebuild_spatial_hash()
 {
     spatial_hash_.clear();
     for (std::size_t i = 0; i < positions_.size(); ++i) {
-        spatial_hash_.insert(i, positions_[i]);
+        spatial_hash_.insert(i, positions_[i], velocities_[i]);
     }
 }
 

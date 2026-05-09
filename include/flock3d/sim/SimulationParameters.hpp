@@ -17,6 +17,13 @@ enum class SimulationModel : std::uint8_t {
     NoiseExperiment,
 };
 
+enum class NeighborMode : std::uint8_t {
+    FixedRadiusUncapped = 0,
+    FixedRadiusClosestK,
+    AdaptiveRadiusClosestK,
+    CellAggregateSocial,
+};
+
 struct SimulationParameters {
     std::uint32_t boid_count{512};
     float world_half_extent{40.0F};
@@ -32,6 +39,7 @@ struct SimulationParameters {
     // A zero max keeps legacy uncapped metric-neighbor behavior.
     std::size_t max_selected_neighbors{0U};
     bool adaptive_perception_enabled{false};
+    NeighborMode neighbor_mode{NeighborMode::FixedRadiusUncapped};
     float separation_radius{2.0F};
     float separation_weight{1.5F};
     float alignment_weight{1.0F};
