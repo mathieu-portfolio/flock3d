@@ -1,7 +1,11 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+
+#include <vector>
 
 #include <flock3d/app/ControlCommands.hpp>
 #include <flock3d/app/ControlHelpers.hpp>
+#include <flock3d/app/FixedUpdateLoop.hpp>
 #include <flock3d/app/OverlayLayout.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
 
@@ -76,4 +80,71 @@ TEST_CASE("Control command queue supports frame boundary batching", "[controls]"
     CHECK(first_frame.front().type == flock3d::app::ControlCommandType::SelectParameter);
     CHECK(first_frame.front().parameter == flock3d::app::TunableParameter::max_speed);
     CHECK(second_frame.empty());
+}
+
+TEST_CASE("Fixed update catch-up applies commands queued between ticks", "[controls][time]")
+{
+    flock3d::sim::FixedTimestepAccumulator timestep{1.0 / 120.0};
+    flock3d::app::ControlCommandQueue commands{};
+    flock3d::app::FixedUpdateLoopConfig config{};
+    config.max_updates_per_rendered_frame = 4;
+
+    int speed = 1;
+    int poll_count = 0;
+    std::vector<int> update_speeds{};
+
+    const auto result = flock3d::app::run_fixed_update_catch_up(
+        timestep,
+        3.0 / 120.0,
+        config,
+        [&] {
+            for (const auto& command : commands.drain()) {
+                if (command.type == flock3d::app::ControlCommandType::AdjustSelectedParameter) {
+                    speed += command.amount;
+                }
+            }
+        },
+        [] { return false; },
+        [&](double) { update_speeds.push_back(speed); },
+        [&] {
+            ++poll_count;
+            if (poll_count == 1) {
+                commands.enqueue(flock3d::app::ControlCommand::adjust_selected_parameter(1));
+            }
+        });
+
+    CHECK(result.updates == 3);
+    CHECK_FALSE(result.reached_update_cap);
+    CHECK_FALSE(result.stopped_for_pause);
+    CHECK(poll_count == 2);
+    REQUIRE(update_speeds.size() == 3);
+    CHECK(update_speeds[0] == 1);
+    CHECK(update_speeds[1] == 2);
+    CHECK(update_speeds[2] == 2);
+}
+
+TEST_CASE("Fixed update catch-up caps steps per rendered frame", "[controls][time]")
+{
+    flock3d::sim::FixedTimestepAccumulator timestep{1.0 / 120.0};
+    flock3d::app::FixedUpdateLoopConfig config{};
+    config.max_updates_per_rendered_frame = 2;
+
+    int updates = 0;
+    int polls = 0;
+
+    const auto result = flock3d::app::run_fixed_update_catch_up(
+        timestep,
+        5.0 / 120.0,
+        config,
+        [] {},
+        [] { return false; },
+        [&](double) { ++updates; },
+        [&] { ++polls; });
+
+    CHECK(result.updates == 2);
+    CHECK(updates == 2);
+    CHECK(polls == 1);
+    CHECK(result.reached_update_cap);
+    CHECK_FALSE(result.stopped_for_pause);
+    CHECK(timestep.accumulated() == Catch::Approx(3.0 / 120.0));
 }

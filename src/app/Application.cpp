@@ -30,7 +30,8 @@ void write_line(std::array<char, 96>& line, const char* format, auto... args)
 
 } // namespace
 
-Application::Application()
+Application::Application(FixedUpdateLoopConfig fixed_update_loop_config)
+    : fixed_update_loop_config_{fixed_update_loop_config}
 {
     SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(screen_width, screen_height, "flock3d");
@@ -67,18 +68,14 @@ void Application::run()
         apply_queued_commands();
 
         if (!paused_) {
-            timestep_.add_frame_time(frame_time);
-            while (timestep_.consume_step()) {
-                apply_queued_commands();
-                if (paused_) {
-                    break;
-                }
-                const auto simulation_start = Clock::now();
-                simulation_.update(static_cast<float>(timestep_.fixed_dt()), &metrics_);
-                metrics_.simulation_update_ms = elapsed_ms(simulation_start, Clock::now());
-                simulation_time_ += timestep_.fixed_dt();
-                recorder_.record_step(simulation_time_, simulation_.size(), metrics_);
-            }
+            (void)run_fixed_update_catch_up(
+                timestep_,
+                frame_time,
+                fixed_update_loop_config_,
+                [this] { apply_queued_commands(); },
+                [this] { return paused_; },
+                [this](double fixed_dt) { update_simulation_step(fixed_dt); },
+                [this] { poll_input_events_between_fixed_updates(); });
         }
 
         const auto render_start = Clock::now();
@@ -148,6 +145,21 @@ void Application::poll_input_events()
     if (queued) {
         mark_overlay_dirty();
     }
+}
+
+void Application::poll_input_events_between_fixed_updates()
+{
+    PollInputEvents();
+    poll_input_events();
+}
+
+void Application::update_simulation_step(double fixed_dt)
+{
+    const auto simulation_start = Clock::now();
+    simulation_.update(static_cast<float>(fixed_dt), &metrics_);
+    metrics_.simulation_update_ms = elapsed_ms(simulation_start, Clock::now());
+    simulation_time_ += fixed_dt;
+    recorder_.record_step(simulation_time_, simulation_.size(), metrics_);
 }
 
 void Application::apply_queued_commands()
