@@ -26,14 +26,31 @@ struct NeighborQueryDiagnostics {
     std::size_t candidates_tested{};
 };
 
+struct CellAggregate {
+    CellCoord coord{};
+    std::size_t count{};
+    Vector3 sum_position{};
+    Vector3 sum_velocity{};
+    Vector3 centroid{};
+    Vector3 average_velocity{};
+};
+
 class SpatialHash3D {
 public:
     explicit SpatialHash3D(float cell_size);
 
     void clear();
-    void insert(std::size_t boid_index, Vector3 position);
+    void insert(std::size_t boid_index, Vector3 position, Vector3 velocity = Vector3{});
 
     [[nodiscard]] std::vector<std::size_t> query_neighbors(Vector3 position, float radius) const;
+    [[nodiscard]] std::vector<CellAggregate> query_cell_aggregates(Vector3 position, float radius) const;
+    void query_cell_aggregates(Vector3 position, float radius, std::vector<CellAggregate>& result) const;
+    void query_cell_aggregates(
+        Vector3 position,
+        float radius,
+        std::vector<CellAggregate>& result,
+        NeighborQueryDiagnostics& diagnostics) const;
+    [[nodiscard]] const CellAggregate* aggregate_for(CellCoord coord) const noexcept;
     void query_neighbors(Vector3 position, float radius, std::vector<std::size_t>& result) const;
     void query_neighbors(
         Vector3 position,
@@ -53,8 +70,13 @@ private:
         Vector3 position{};
     };
 
+    struct Cell {
+        std::vector<Entry> entries{};
+        CellAggregate aggregate{};
+    };
+
     float cell_size_{};
-    std::unordered_map<CellCoord, std::vector<Entry>, CellCoordHash> cells_;
+    std::unordered_map<CellCoord, Cell, CellCoordHash> cells_;
 };
 
 } // namespace flock3d::sim

@@ -136,21 +136,22 @@ Measures total `BoidSimulation::update` cost for these models while collecting t
 - `FishSchool`
 - `NoiseExperiment`
 
-The benchmark runs three neighbor modes for each model and boid count:
+The benchmark runs four neighbor modes for each model and boid count:
 
 - `fixed_radius_uncapped`: classic metric-neighbor behavior. Every visible boid inside the fixed perception radius contributes to alignment, cohesion, and separation. This is the fixed-radius baseline and remains available for regression comparisons.
 - `fixed_radius_closest_k`: fixed metric perception radius, followed by deterministic closest-K topological selection. Candidates are ordered by squared distance with boid index as the tie-breaker, and only `max_selected_neighbors` are used for steering.
 - `adaptive_radius_closest_k`: first queries a broad perception range, estimates local density, adapts the effective radius, then applies closest-K selection. The radius formula is `base_perception_radius * sqrt(target_neighbor_count / max(local_candidate_count, 1))`, clamped between `min_perception_radius` and `max_perception_radius`. Dense neighborhoods shrink toward the minimum; sparse neighborhoods expand toward the maximum.
+- `cell_aggregate_social`: uses exact individual boids only for close-range separation, then uses cached occupied-cell centroids for cohesion and cached occupied-cell average velocities for alignment. Each social cell is weighted by its boid count after excluding the current boid from its own cell. This keeps collision/near-overlap avoidance exact while reducing dense-cluster social steering from per-boid iteration to per-cell iteration. It differs from closest-K because closest-K still scans and ranks individual candidates for all social forces; cell aggregates replace social individual neighbors with local cell summaries. The first implementation uses a fixed social perception radius and optional model FOV filtering for bird/fish social cells; distance falloff and aggregate-specific FOV weighting are future work.
 
-Adaptive perception changes which neighbors are sensed before topological selection. Adaptive separation is intentionally **not** part of this refactor; separation continues to use the selected-neighbor list and the existing fixed `separation_radius` gate.
+Adaptive perception changes which neighbors are sensed before topological selection. Adaptive separation is intentionally **not** part of this refactor; separation continues to use the selected-neighbor list and the existing fixed `separation_radius` gate. In `cell_aggregate_social`, separation uses its own exact fixed `separation_radius` query and 360° perception, independent of the aggregate social query.
 
 Columns:
 
 ```text
-scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,candidates_per_query,effective_neighbors_per_query,mean_update_ms,min_update_ms,max_update_ms
+scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,candidates_per_query,effective_neighbors_per_query,exact_separation_neighbors_mean,aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms
 ```
 
-To compare the three neighbor modes directly, run:
+To compare all neighbor modes directly, including `cell_aggregate_social`, run:
 
 ```bash
 scripts/run_benchmark.sh simulation_update
@@ -215,4 +216,4 @@ This benchmark helps decide whether deterministic noise generation should be opt
 
 ## Interpreting time-series rows
 
-Rows with the same scenario/model/mode and boid count are ordered by `sample_index`. Inspect how `mean_update_ms`, `max_update_ms`, candidate counts, effective neighbors, and cell occupancy change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.
+Rows with the same scenario/model/mode and boid count are ordered by `sample_index`. Inspect how `mean_update_ms`, `max_update_ms`, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.

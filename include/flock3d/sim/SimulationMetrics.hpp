@@ -13,10 +13,16 @@ struct SimulationMetrics {
     std::uint64_t neighbor_candidates{};
     std::uint64_t neighbor_total{};
     std::uint64_t selected_neighbors_total{};
+    std::uint64_t exact_separation_neighbors_total{};
+    std::uint64_t aggregate_cells_used_total{};
+    double social_weight_sum_total{};
     double effective_radius_total{};
     std::uint64_t effective_radius_count{};
     double effective_radius_mean{};
     double selected_neighbors_mean{};
+    double exact_separation_neighbors_mean{};
+    double aggregate_cells_used_mean{};
+    double social_weight_sum_mean{};
     double avg_candidates_per_query{};
     std::size_t max_candidates_per_query{};
     double avg_effective_neighbors_per_query{};
@@ -52,10 +58,16 @@ struct SimulationMetrics {
         neighbor_candidates = 0;
         neighbor_total = 0;
         selected_neighbors_total = 0;
+        exact_separation_neighbors_total = 0;
+        aggregate_cells_used_total = 0;
+        social_weight_sum_total = 0.0;
         effective_radius_total = 0.0;
         effective_radius_count = 0;
         effective_radius_mean = 0.0;
         selected_neighbors_mean = 0.0;
+        exact_separation_neighbors_mean = 0.0;
+        aggregate_cells_used_mean = 0.0;
+        social_weight_sum_mean = 0.0;
         avg_candidates_per_query = 0.0;
         max_candidates_per_query = 0;
         avg_effective_neighbors_per_query = 0.0;
@@ -98,6 +110,16 @@ struct SimulationMetrics {
         neighbor_total += neighbor_count;
         selected_neighbors_total += neighbor_count;
         max_effective_neighbors_per_query = std::max(max_effective_neighbors_per_query, neighbor_count);
+    }
+
+    constexpr void record_cell_aggregate_social(
+        std::size_t exact_separation_neighbors,
+        std::size_t aggregate_cells_used,
+        double social_weight_sum) noexcept
+    {
+        exact_separation_neighbors_total += exact_separation_neighbors;
+        aggregate_cells_used_total += aggregate_cells_used;
+        social_weight_sum_total += social_weight_sum;
     }
 
     constexpr void record_effective_radius(float radius) noexcept
@@ -163,6 +185,15 @@ struct SimulationMetrics {
             : 0.0;
         effective_radius_mean = effective_radius_count > 0
             ? effective_radius_total / static_cast<double>(effective_radius_count)
+            : 0.0;
+        exact_separation_neighbors_mean = neighbor_queries > 0
+            ? static_cast<double>(exact_separation_neighbors_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        aggregate_cells_used_mean = neighbor_queries > 0
+            ? static_cast<double>(aggregate_cells_used_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        social_weight_sum_mean = neighbor_queries > 0
+            ? social_weight_sum_total / static_cast<double>(neighbor_queries)
             : 0.0;
         visited_cells_per_query = neighbor_queries > 0
             ? static_cast<double>(visited_cells_total) / static_cast<double>(neighbor_queries)
