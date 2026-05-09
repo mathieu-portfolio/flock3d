@@ -3,6 +3,7 @@ set(flock3d_test_sources
     test_simulation.cpp
     test_controls.cpp
     test_experiment.cpp
+    test_benchmarks.cpp
 )
 
 add_executable(flock3d_tests ${flock3d_test_sources})

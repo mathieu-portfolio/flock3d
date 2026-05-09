@@ -69,7 +69,7 @@ inline void print_usage(std::string_view executable)
 {
     std::cerr << "Usage: " << executable
               << " [--duration seconds] [--sample seconds] [--warmup seconds]\n"
-              << "CSV is printed to stdout. Progress is printed to stderr only when stdout/stderr are terminals.\n";
+              << "CSV is printed to stdout. Progress is printed to stderr only when stderr is a terminal.\n";
 }
 
 inline BenchmarkOptions parse_options(int argc, char** argv)
@@ -110,12 +110,18 @@ inline bool stream_is_terminal(int file_descriptor) noexcept
 #endif
 }
 
+inline bool progress_enabled_for_streams(bool stdout_is_terminal, bool stderr_is_terminal) noexcept
+{
+    (void)stdout_is_terminal;
+    return stderr_is_terminal;
+}
+
 inline bool progress_enabled() noexcept
 {
 #if defined(_WIN32)
-    return stream_is_terminal(_fileno(stdout)) && stream_is_terminal(_fileno(stderr));
+    return progress_enabled_for_streams(stream_is_terminal(_fileno(stdout)), stream_is_terminal(_fileno(stderr)));
 #else
-    return stream_is_terminal(STDOUT_FILENO) && stream_is_terminal(STDERR_FILENO);
+    return progress_enabled_for_streams(stream_is_terminal(STDOUT_FILENO), stream_is_terminal(STDERR_FILENO));
 #endif
 }
 
