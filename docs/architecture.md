@@ -43,7 +43,7 @@ Neighbor queries use a uniform 3D spatial hash rather than all-pairs checks. Boi
 
 ## Deterministic stepping
 
-The app advances the simulation with a fixed timestep, and the experiment runner exposes the same `fixed_dt` as a command-line option. Determinism depends on keeping the scenario, seed, boid count, timestep, duration, export cadence, preset, and swept parameter values identical between runs.
+The app advances the simulation with a fixed timestep, and the experiment runner exposes the same `fixed_dt` as a command-line option. Interactive input is polled once per rendered frame into a command queue; queued commands are drained and applied at frame or fixed-tick boundaries before simulation updates. This keeps event polling decoupled from stepping and prevents scenario, seed, boid-count, pause, and tuning changes from mutating simulation state mid-step. Determinism depends on keeping the scenario, seed, boid count, timestep, duration, export cadence, preset, and swept parameter values identical between runs.
 
 ## Data flow
 
@@ -51,6 +51,10 @@ The app advances the simulation with a fixed timestep, and the experiment runner
 Scenario defaults + preset + overrides
         ↓
 Simulation state initialization
+        ↓
+Frame event polling → queued control commands
+        ↓
+Frame/tick boundary command application
         ↓
 Fixed-timestep update loop
         ↓

@@ -60,14 +60,19 @@ void Application::run()
         const float frame_time = GetFrameTime();
         const float frame_time_ms = frame_time * 1000.0F;
 
-        handle_input();
+        poll_input_events();
         if (camera_controller_.update(camera_, frame_time, true)) {
             mark_overlay_dirty();
         }
+        apply_queued_commands();
 
         if (!paused_) {
             timestep_.add_frame_time(frame_time);
             while (timestep_.consume_step()) {
+                apply_queued_commands();
+                if (paused_) {
+                    break;
+                }
                 const auto simulation_start = Clock::now();
                 simulation_.update(static_cast<float>(timestep_.fixed_dt()), &metrics_);
                 metrics_.simulation_update_ms = elapsed_ms(simulation_start, Clock::now());
@@ -104,54 +109,107 @@ void Application::run()
     }
 }
 
-void Application::handle_input()
+void Application::poll_input_events()
 {
-    bool changed = false;
-    changed = debug_controls_.handle_input(show_overlay_) || changed;
-    update_overlay_scroll();
-
-    const auto simulation_input = simulation_controls_.handle_input(simulation_, paused_);
-    changed = simulation_input.changed || changed;
-    if (simulation_input.changed) {
-        active_scenario_.simulation_parameters = simulation_.parameters();
-    }
-    if (simulation_input.reset) {
-        metrics_ = sim::SimulationMetrics{};
-        simulation_time_ = 0.0;
-    }
+    bool queued = false;
+    queued = debug_controls_.handle_input(command_queue_) || queued;
+    queued = simulation_controls_.handle_input(command_queue_) || queued;
+    queued = update_overlay_scroll() || queued;
 
     if (IsKeyPressed(KEY_PERIOD)) {
-        apply_scenario(sim::next_scenario_type(active_scenario_.type));
-        changed = true;
+        command_queue_.enqueue(ControlCommand::apply_next_scenario());
+        queued = true;
     }
     if (IsKeyPressed(KEY_COMMA)) {
-        apply_scenario(sim::previous_scenario_type(active_scenario_.type));
-        changed = true;
+        command_queue_.enqueue(ControlCommand::apply_previous_scenario());
+        queued = true;
     }
     if (IsKeyPressed(KEY_N)) {
-        randomize_current_seed();
-        changed = true;
+        command_queue_.enqueue(ControlCommand::randomize_seed());
+        queued = true;
     }
     if (IsKeyPressed(KEY_O)) {
-        toggle_recording();
-        changed = true;
+        command_queue_.enqueue(ControlCommand::toggle_recording());
+        queued = true;
     }
     if (IsKeyPressed(KEY_M)) {
-        cycle_export_mode();
-        changed = true;
+        command_queue_.enqueue(ControlCommand::cycle_export_mode());
+        queued = true;
     }
     if (IsKeyPressed(KEY_PAGE_UP)) {
-        adjust_sample_rate(2.0);
-        changed = true;
+        command_queue_.enqueue(ControlCommand::adjust_sample_rate(2.0));
+        queued = true;
     }
     if (IsKeyPressed(KEY_PAGE_DOWN)) {
-        adjust_sample_rate(0.5);
-        changed = true;
+        command_queue_.enqueue(ControlCommand::adjust_sample_rate(0.5));
+        queued = true;
+    }
+
+    if (queued) {
+        mark_overlay_dirty();
+    }
+}
+
+void Application::apply_queued_commands()
+{
+    bool changed = false;
+    for (const ControlCommand& command : command_queue_.drain()) {
+        changed = apply_control_command(command) || changed;
     }
 
     if (changed) {
         mark_overlay_dirty();
     }
+}
+
+bool Application::apply_control_command(const ControlCommand& command)
+{
+    switch (command.type) {
+    case ControlCommandType::ToggleOverlay:
+        show_overlay_ = !show_overlay_;
+        return true;
+    case ControlCommandType::TogglePause:
+        paused_ = !paused_;
+        return true;
+    case ControlCommandType::ResetSimulation:
+        reset_current_scenario();
+        active_scenario_.simulation_parameters = simulation_.parameters();
+        return true;
+    case ControlCommandType::AdjustBoidCount:
+        adjust_boid_count(command.amount);
+        active_scenario_.simulation_parameters = simulation_.parameters();
+        return true;
+    case ControlCommandType::SelectParameter:
+        simulation_controls_.select_parameter(command.parameter);
+        return true;
+    case ControlCommandType::OffsetSelectedParameter:
+        simulation_controls_.offset_selected_parameter(command.amount);
+        return true;
+    case ControlCommandType::AdjustSelectedParameter:
+        adjust_parameter(simulation_.parameters(), simulation_controls_.selected_parameter(), command.amount);
+        active_scenario_.simulation_parameters = simulation_.parameters();
+        return true;
+    case ControlCommandType::ApplyNextScenario:
+        apply_scenario(sim::next_scenario_type(active_scenario_.type));
+        return true;
+    case ControlCommandType::ApplyPreviousScenario:
+        apply_scenario(sim::previous_scenario_type(active_scenario_.type));
+        return true;
+    case ControlCommandType::RandomizeSeed:
+        randomize_current_seed();
+        return true;
+    case ControlCommandType::ToggleRecording:
+        toggle_recording();
+        return true;
+    case ControlCommandType::CycleExportMode:
+        cycle_export_mode();
+        return true;
+    case ControlCommandType::AdjustSampleRate:
+        adjust_sample_rate(command.scale);
+        return true;
+    }
+
+    return false;
 }
 
 void Application::mark_overlay_dirty() noexcept
@@ -170,6 +228,17 @@ void Application::apply_scenario(sim::ScenarioType type)
 void Application::reset_current_scenario()
 {
     simulation_.reset();
+    metrics_ = sim::SimulationMetrics{};
+    simulation_time_ = 0.0;
+}
+
+void Application::adjust_boid_count(int delta)
+{
+    auto& parameters = simulation_.parameters();
+    const auto current = static_cast<int>(simulation_.size());
+    const auto next = std::clamp(current + delta, 0, 100'000);
+    parameters.boid_count = static_cast<unsigned int>(next);
+    simulation_.reset(parameters.boid_count);
     metrics_ = sim::SimulationMetrics{};
     simulation_time_ = 0.0;
 }

@@ -7,6 +7,7 @@
 #include "app/CameraController.hpp"
 #include "app/DebugControls.hpp"
 #include "app/SimulationControls.hpp"
+#include <flock3d/app/ControlCommands.hpp>
 #include <flock3d/app/OverlayLayout.hpp>
 #include <flock3d/experiment/MetricsExport.hpp>
 #include "render/BoidRenderer.hpp"
@@ -35,11 +36,14 @@ private:
     static constexpr OverlayLayout overlay_layout{};
     static constexpr std::size_t overlay_line_count = overlay_layout.line_count;
 
-    void handle_input();
+    void poll_input_events();
+    void apply_queued_commands();
+    [[nodiscard]] bool apply_control_command(const ControlCommand& command);
     void mark_overlay_dirty() noexcept;
     void refresh_overlay_text(float frame_time_ms);
     void apply_scenario(sim::ScenarioType type);
     void reset_current_scenario();
+    void adjust_boid_count(int delta);
     void randomize_current_seed();
     void toggle_recording();
     void cycle_export_mode();
@@ -56,6 +60,7 @@ private:
     CameraController camera_controller_{};
     SimulationControls simulation_controls_{};
     DebugControls debug_controls_{};
+    ControlCommandQueue command_queue_{};
     sim::ScenarioDefinition active_scenario_{sim::build_scenario(sim::ScenarioType::ClassicBoids)};
     sim::BoidSimulation simulation_{active_scenario_.simulation_parameters};
     sim::FixedTimestepAccumulator timestep_{1.0 / 120.0};
