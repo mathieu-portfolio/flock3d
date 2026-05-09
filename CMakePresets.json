@@ -82,7 +82,8 @@
         "flock3d_spatial_hash_benchmark",
         "flock3d_simulation_update_benchmark",
         "flock3d_metrics_benchmark",
-        "flock3d_noise_benchmark"
+        "flock3d_noise_benchmark",
+        "flock3d_simulation_ticks_benchmark"
       ]
     },
     {
@@ -93,7 +94,8 @@
         "flock3d_spatial_hash_benchmark",
         "flock3d_simulation_update_benchmark",
         "flock3d_metrics_benchmark",
-        "flock3d_noise_benchmark"
+        "flock3d_noise_benchmark",
+        "flock3d_simulation_ticks_benchmark"
       ]
     },
     {

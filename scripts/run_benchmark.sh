@@ -22,6 +22,7 @@ benchmarks=(
     spatial_hash
     metrics
     noise
+    simulation_ticks
 )
 
 declare -A targets=(
@@ -29,6 +30,7 @@ declare -A targets=(
     [spatial_hash]=flock3d_spatial_hash_benchmark
     [metrics]=flock3d_metrics_benchmark
     [noise]=flock3d_noise_benchmark
+    [simulation_ticks]=flock3d_simulation_ticks_benchmark
 )
 
 declare -A outputs=(
@@ -36,11 +38,12 @@ declare -A outputs=(
     [spatial_hash]=spatial_hash.csv
     [metrics]=metrics.csv
     [noise]=noise.csv
+    [simulation_ticks]=simulation_ticks.csv
 )
 
 usage() {
     cat <<'USAGE'
-Usage: scripts/run_benchmark.sh [options] [all|simulation_update|spatial_hash|metrics|noise] [-- benchmark-args...]
+Usage: scripts/run_benchmark.sh [options] [all|simulation_update|simulation_ticks|spatial_hash|metrics|noise] [-- benchmark-args...]
 
 Build and run one or more focused benchmark executables, writing CSV files under
 outputs/benchmarks/ by default.
@@ -133,7 +136,7 @@ while [[ $# -gt 0 ]]; do
             shift
             break
             ;;
-        all|simulation_update|spatial_hash|metrics|noise)
+        all|simulation_update|simulation_ticks|spatial_hash|metrics|noise)
             selection="$1"
             shift
             ;;

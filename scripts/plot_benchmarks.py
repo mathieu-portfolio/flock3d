@@ -33,6 +33,8 @@ class BenchmarkSpec:
     time_metrics: tuple[str, ...]
     scaling_metrics: tuple[str, ...]
     diagnostic_metrics: tuple[str, ...] = ()
+    sample_column: str = "sample_index"
+    elapsed_column: str = "elapsed_seconds"
 
 
 BENCHMARKS: tuple[BenchmarkSpec, ...] = (
@@ -79,6 +81,16 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         primary_metric="mean_update_ms",
         time_metrics=("mean_update_ms",),
         scaling_metrics=("mean_update_ms", "max_update_ms"),
+    ),
+    BenchmarkSpec(
+        name="simulation_ticks",
+        filename="simulation_ticks.csv",
+        group_columns=("scenario",),
+        primary_metric="average_ms_per_tick",
+        time_metrics=("average_ms_per_tick", "p95_ms_per_tick", "real_time_factor"),
+        scaling_metrics=("average_ms_per_tick", "p95_ms_per_tick", "real_time_factor"),
+        sample_column="repetition",
+        elapsed_column="simulated_seconds",
     ),
 )
 
@@ -146,19 +158,19 @@ def line_label(row: pd.Series, group_columns: tuple[str, ...]) -> str:
     return " / ".join(parts)
 
 
-def latest_samples(frame: pd.DataFrame, group_columns: tuple[str, ...]) -> pd.DataFrame:
-    sort_columns = [*group_columns, "boid_count", "sample_index", "elapsed_seconds"]
-    latest = frame.sort_values(sort_columns).groupby([*group_columns, "boid_count"], as_index=False).tail(1)
-    return latest.sort_values([*group_columns, "boid_count"])
+def latest_samples(spec: BenchmarkSpec, frame: pd.DataFrame) -> pd.DataFrame:
+    sort_columns = [*spec.group_columns, "boid_count", spec.sample_column, spec.elapsed_column]
+    latest = frame.sort_values(sort_columns).groupby([*spec.group_columns, "boid_count"], as_index=False).tail(1)
+    return latest.sort_values([*spec.group_columns, "boid_count"])
 
 
 def write_summary(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path) -> Path:
-    latest = latest_samples(frame, spec.group_columns)
+    latest = latest_samples(spec, frame)
     columns = [
         *spec.group_columns,
         "boid_count",
-        "sample_index",
-        "elapsed_seconds",
+        spec.sample_column,
+        spec.elapsed_column,
         spec.primary_metric,
     ]
     optional_columns = [column for column in ("iterations_in_sample",) if column in latest.columns]
@@ -173,10 +185,10 @@ def plot_time_series(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path,
     for metric in spec.time_metrics:
         fig, ax = plt.subplots(figsize=(10, 5.5))
         for _, group in frame.groupby([*spec.group_columns, "boid_count"], dropna=False):
-            group = group.sort_values("elapsed_seconds")
-            ax.plot(group["elapsed_seconds"], group[metric], marker="o", linewidth=1.2, label=line_label(group.iloc[0], spec.group_columns))
+            group = group.sort_values(spec.elapsed_column)
+            ax.plot(group[spec.elapsed_column], group[metric], marker="o", linewidth=1.2, label=line_label(group.iloc[0], spec.group_columns))
         ax.set_title(f"{spec.name}: {metric} over time")
-        ax.set_xlabel("elapsed_seconds")
+        ax.set_xlabel(spec.elapsed_column)
         ax.set_ylabel(metric)
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize="x-small", ncols=2)
@@ -189,7 +201,7 @@ def plot_time_series(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path,
 
 
 def plot_scaling(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path, file_format: str) -> Path:
-    latest = latest_samples(frame, spec.group_columns)
+    latest = latest_samples(spec, frame)
     averaged = latest.groupby([*spec.group_columns, "boid_count"], as_index=False)[list(spec.scaling_metrics)].mean()
 
     fig, axes = plt.subplots(len(spec.scaling_metrics), 1, figsize=(9, 4.0 * len(spec.scaling_metrics)), squeeze=False)
@@ -214,7 +226,7 @@ def plot_diagnostics(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path,
     paths: list[Path] = []
     if not spec.diagnostic_metrics:
         return paths
-    latest = latest_samples(frame, spec.group_columns)
+    latest = latest_samples(spec, frame)
     for metric in spec.diagnostic_metrics:
         fig, ax = plt.subplots(figsize=(9, 5))
         for _, group in latest.groupby(list(spec.group_columns), dropna=False):
@@ -243,14 +255,14 @@ def process_benchmark(spec: BenchmarkSpec, input_dir: Path, output_dir: Path, fi
     frame = pd.read_csv(csv_path)
     numeric_columns = {
         "boid_count",
-        "elapsed_seconds",
-        "sample_index",
+        spec.elapsed_column,
+        spec.sample_column,
         *spec.time_metrics,
         *spec.scaling_metrics,
         *spec.diagnostic_metrics,
     }
     require_columns(frame, [*spec.group_columns, *numeric_columns], csv_path)
-    frame = coerce_numeric(frame, numeric_columns, csv_path).dropna(subset=["boid_count", "elapsed_seconds", "sample_index"])
+    frame = coerce_numeric(frame, numeric_columns, csv_path).dropna(subset=["boid_count", spec.elapsed_column, spec.sample_column])
     if frame.empty:
         raise ValueError(f"No plottable rows found in {csv_path}.")
 

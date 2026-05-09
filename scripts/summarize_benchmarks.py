@@ -16,6 +16,9 @@ class SummarySpec:
     filename: str
     group_columns: tuple[str, ...]
     primary_metric: str
+    sample_column: str = "sample_index"
+    elapsed_column: str = "elapsed_seconds"
+    iterations_column: str = "iterations_in_sample"
 
 
 BENCHMARKS: tuple[SummarySpec, ...] = (
@@ -23,6 +26,15 @@ BENCHMARKS: tuple[SummarySpec, ...] = (
     SummarySpec("spatial_hash", "spatial_hash.csv", ("scenario",), "mean_spatial_query_ms"),
     SummarySpec("metrics", "metrics.csv", ("scenario", "metric_mode"), "mean_update_ms"),
     SummarySpec("noise", "noise.csv", ("scenario", "noise_mode"), "mean_update_ms"),
+    SummarySpec(
+        "simulation_ticks",
+        "simulation_ticks.csv",
+        ("scenario",),
+        "average_ms_per_tick",
+        sample_column="repetition",
+        elapsed_column="simulated_seconds",
+        iterations_column="measured_ticks",
+    ),
 )
 
 OUTPUT_COLUMNS = (
@@ -100,7 +112,7 @@ def latest_rows(spec: SummarySpec, input_dir: Path) -> list[dict[str, str]]:
         reader = csv.DictReader(handle)
         require_columns(
             reader.fieldnames or (),
-            (*spec.group_columns, "boid_count", "sample_index", "elapsed_seconds", spec.primary_metric),
+            (*spec.group_columns, "boid_count", spec.sample_column, spec.elapsed_column, spec.primary_metric),
             csv_path,
         )
         latest: dict[tuple[str, ...], dict[str, str]] = {}
@@ -108,8 +120,8 @@ def latest_rows(spec: SummarySpec, input_dir: Path) -> list[dict[str, str]]:
             key = (*[row[column] for column in spec.group_columns], row["boid_count"])
             current = latest.get(key)
             if current is None or (
-                sort_value(row, "sample_index"), sort_value(row, "elapsed_seconds")
-            ) > (sort_value(current, "sample_index"), sort_value(current, "elapsed_seconds")):
+                sort_value(row, spec.sample_column), sort_value(row, spec.elapsed_column)
+            ) > (sort_value(current, spec.sample_column), sort_value(current, spec.elapsed_column)):
                 latest[key] = row
 
     summaries: list[dict[str, str]] = []
@@ -120,11 +132,11 @@ def latest_rows(spec: SummarySpec, input_dir: Path) -> list[dict[str, str]]:
                 "scenario": row.get("scenario", ""),
                 "mode": mode_value(row, spec),
                 "boid_count": row.get("boid_count", ""),
-                "sample_index": row.get("sample_index", ""),
-                "elapsed_seconds": row.get("elapsed_seconds", ""),
+                "sample_index": row.get(spec.sample_column, ""),
+                "elapsed_seconds": row.get(spec.elapsed_column, ""),
                 "primary_metric": spec.primary_metric,
                 "primary_value": row.get(spec.primary_metric, ""),
-                "iterations_in_sample": row.get("iterations_in_sample", ""),
+                "iterations_in_sample": row.get(spec.iterations_column, ""),
             }
         )
     return summaries
