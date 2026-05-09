@@ -32,7 +32,7 @@ struct ExperimentConfig {
     sim::ScenarioType scenario{sim::ScenarioType::ClassicBoids};
     std::uint32_t seed{123U};
     std::uint32_t boids{512U};
-    double duration_seconds{30.0};
+    double duration_seconds{20.0};
     double fixed_dt{1.0 / 120.0};
     double sample_rate_hz{5.0};
     ExportMode export_mode{ExportMode::SampledTimeSeries};

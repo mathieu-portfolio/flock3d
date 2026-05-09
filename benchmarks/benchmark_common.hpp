@@ -26,7 +26,7 @@ namespace flock3d::bench {
 
 using Clock = std::chrono::steady_clock;
 
-inline constexpr double default_duration_seconds = 30.0;
+inline constexpr double default_duration_seconds = 20.0;
 inline constexpr double default_sample_seconds = 5.0;
 inline constexpr double default_warmup_seconds = 1.0;
 inline constexpr float fixed_dt = 1.0F / 120.0F;

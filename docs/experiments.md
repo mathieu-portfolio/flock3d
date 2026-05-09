@@ -29,7 +29,7 @@ Sampled time-series example:
   --scenario ClassicBoids \
   --seed 123 \
   --boids 2048 \
-  --duration 30 \
+  --duration 20 \
   --fixed-dt 0.008333 \
   --sample-rate 5 \
   --export-mode sampled \
@@ -43,7 +43,7 @@ Summary example:
   --scenario ClassicBoids \
   --seed 123 \
   --boids 2048 \
-  --duration 30 \
+  --duration 20 \
   --fixed-dt 0.008333 \
   --sample-rate 5 \
   --export-mode summary \
@@ -65,7 +65,7 @@ Preset example:
 ```bash
 ./build/local/bin/flock3d_experiment_runner \
   --preset bird_baseline \
-  --duration 30 \
+  --duration 20 \
   --sample-rate 5 \
   --output outputs/bird_baseline.csv
 ```

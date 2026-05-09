@@ -31,7 +31,7 @@ The executables are written to `build/release/bin/` for the default release pres
 All focused benchmarks accept the same lightweight options:
 
 ```bash
---duration seconds   # timed duration per scenario, default 30
+--duration seconds   # timed duration per scenario, default 20
 --sample seconds     # CSV sample window length, default 5
 --warmup seconds     # untimed warm-up per scenario, default 1
 ```
@@ -41,7 +41,7 @@ CSV is printed to stdout so output is easy to redirect. Progress bars are printe
 Example progress display:
 
 ```text
-[##########----------]  50% | simulation_update | ClassicBoids | 256 boids | 15.0s / 30s
+[##########----------]  50% | simulation_update | ClassicBoids | 256 boids | 15.0s / 20s
 ```
 
 ## Suggested first commands

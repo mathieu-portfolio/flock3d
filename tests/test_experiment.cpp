@@ -55,7 +55,7 @@ TEST_CASE("SummaryAggregator computes macroscopic aggregate fields", "[experimen
     aggregator.add_sample(first);
     aggregator.add_sample(second);
 
-    const auto summary = aggregator.statistics(30.0);
+    const auto summary = aggregator.statistics(20.0);
     CHECK(summary.mean_polarization == Catch::Approx(0.5));
     CHECK(summary.max_polarization == Catch::Approx(0.75));
     CHECK(summary.mean_cohesion == Catch::Approx(12.0));
@@ -64,7 +64,7 @@ TEST_CASE("SummaryAggregator computes macroscopic aggregate fields", "[experimen
     CHECK(summary.mean_average_neighbors == Catch::Approx(6.0));
     CHECK(summary.mean_depth == Catch::Approx(-10.0));
     CHECK(summary.mean_depth_variance == Catch::Approx(3.0));
-    CHECK(summary.total_duration_seconds == Catch::Approx(30.0));
+    CHECK(summary.total_duration_seconds == Catch::Approx(20.0));
 }
 
 TEST_CASE("First sampled metrics are deterministic for seed and dt", "[experiment][determinism]")
