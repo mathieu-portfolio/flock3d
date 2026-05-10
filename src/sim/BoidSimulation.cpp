@@ -315,8 +315,9 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
 
 void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* metrics, ModelBehavior behavior)
 {
-    const float social_radius = base_perception_radius(parameters_);
-    const float social_radius_squared = social_radius * social_radius;
+    const float social_query_radius = parameters_.adaptive_perception_enabled
+        ? std::max(base_perception_radius(parameters_), max_perception_radius(parameters_))
+        : base_perception_radius(parameters_);
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
     const bool noise_active = behavior.apply_noise && parameters_.noise_enabled;
     const std::uint64_t noise_step = noise_step_;
@@ -354,18 +355,24 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         }
 
         NeighborQueryDiagnostics aggregate_diagnostics{};
-        spatial_hash_.query_cell_aggregates(position, social_radius, aggregate_cells_, aggregate_diagnostics);
+        if (behavior.filter_neighbors_by_field_of_view) {
+            spatial_hash_.query_visible_cell_aggregates(
+                position,
+                social_query_radius,
+                velocity,
+                parameters_.field_of_view_degrees,
+                aggregate_cells_,
+                aggregate_diagnostics);
+        } else {
+            spatial_hash_.query_cell_aggregates(position, social_query_radius, aggregate_cells_, aggregate_diagnostics);
+        }
 
-        Vector3 weighted_velocity_sum{};
-        Vector3 weighted_centroid_sum{};
-        double social_weight_sum = 0.0;
-        std::size_t aggregate_cells_used = 0;
-        std::size_t aggregate_radius_rejected_count = 0;
-        std::size_t aggregate_fov_rejected_count = 0;
+        std::size_t local_social_candidate_count = 0;
         const CellCoord own_cell = spatial_hash_.cell_for(position);
-        for (CellAggregate aggregate : aggregate_cells_) {
+        for (CellAggregate& aggregate : aggregate_cells_) {
             if (aggregate.coord == own_cell) {
                 if (aggregate.count <= 1U) {
+                    aggregate.count = 0U;
                     continue;
                 }
                 --aggregate.count;
@@ -375,6 +382,22 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 aggregate.centroid = math::scale(aggregate.sum_position, inverse_count);
                 aggregate.average_velocity = math::scale(aggregate.sum_velocity, inverse_count);
             }
+            local_social_candidate_count += aggregate.count;
+        }
+
+        const float social_radius = compute_effective_perception_radius(parameters_, local_social_candidate_count);
+        const float social_radius_squared = social_radius * social_radius;
+
+        Vector3 weighted_velocity_sum{};
+        Vector3 weighted_centroid_sum{};
+        double social_weight_sum = 0.0;
+        std::size_t aggregate_cells_used = 0;
+        std::size_t aggregate_radius_rejected_count = 0;
+        std::size_t aggregate_fov_rejected_count = 0;
+        for (const CellAggregate& aggregate : aggregate_cells_) {
+            if (aggregate.count == 0U) {
+                continue;
+            }
 
             const Vector3 offset = math::subtract(aggregate.centroid, position);
             const float distance_squared = math::length_squared(offset);
@@ -382,12 +405,17 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 ++aggregate_radius_rejected_count;
                 continue;
             }
-            if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
+            const float visibility_weight = social_perception_weight(
+                velocity,
+                offset,
+                social_radius,
+                behavior.filter_neighbors_by_field_of_view);
+            if (visibility_weight <= 0.0F) {
                 ++aggregate_fov_rejected_count;
                 continue;
             }
 
-            const float weight = static_cast<float>(aggregate.count);
+            const float weight = static_cast<float>(aggregate.count) * visibility_weight;
             weighted_centroid_sum = math::add(weighted_centroid_sum, math::scale(aggregate.centroid, weight));
             weighted_velocity_sum = math::add(weighted_velocity_sum, math::scale(aggregate.average_velocity, weight));
             social_weight_sum += static_cast<double>(weight);
@@ -404,7 +432,7 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
 
         if (metrics != nullptr) {
             metrics->record_effective_radius(social_radius);
-            metrics->record_effective_neighbors(static_cast<std::size_t>(social_weight_sum));
+            metrics->record_effective_neighbors(static_cast<std::size_t>(std::ceil(social_weight_sum)));
             metrics->record_neighbor_filtering(
                 aggregate_cells_used,
                 aggregate_cells_used,
@@ -521,6 +549,41 @@ bool BoidSimulation::neighbor_in_field_of_view(Vector3 velocity, Vector3 offset)
     const float half_angle_radians = parameters_.field_of_view_degrees * (std::numbers::pi_v<float> / 180.0F) * 0.5F;
     const float minimum_dot = std::cos(half_angle_radians);
     return math::dot(forward, direction) >= minimum_dot;
+}
+
+float BoidSimulation::social_perception_weight(
+    Vector3 velocity,
+    Vector3 offset,
+    float social_radius,
+    bool use_front_weighting) const noexcept
+{
+    const float distance_squared = math::length_squared(offset);
+    if (distance_squared <= 0.000001F || social_radius <= 0.0F) {
+        return 0.0F;
+    }
+
+    const float distance = std::sqrt(distance_squared);
+    if (distance >= social_radius) {
+        return 0.0F;
+    }
+
+    const float distance_weight = std::clamp(1.0F - (distance / social_radius), 0.0F, 1.0F);
+    if (!use_front_weighting) {
+        return distance_weight;
+    }
+
+    if (!neighbor_in_field_of_view(velocity, offset)) {
+        return 0.0F;
+    }
+
+    const Vector3 forward = math::normalize_safe(velocity);
+    const Vector3 direction = math::normalize_safe(offset);
+    if (math::length_squared(forward) <= 0.000001F || math::length_squared(direction) <= 0.000001F) {
+        return distance_weight;
+    }
+
+    const float front_weight = std::clamp(0.5F + (0.5F * math::dot(forward, direction)), 0.0F, 1.0F);
+    return distance_weight * front_weight;
 }
 
 Vector3 BoidSimulation::bird_altitude_acceleration(Vector3 position) const noexcept

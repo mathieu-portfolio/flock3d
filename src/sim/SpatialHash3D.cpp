@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <stdexcept>
 
 #include <flock3d/math/Vec3.hpp>
@@ -12,6 +13,50 @@ namespace {
 [[nodiscard]] int fast_floor_to_int(float value) noexcept
 {
     return static_cast<int>(std::floor(value));
+}
+
+[[nodiscard]] Vector3 cell_center(CellCoord coord, float cell_size) noexcept
+{
+    return Vector3{
+        (static_cast<float>(coord.x) + 0.5F) * cell_size,
+        (static_cast<float>(coord.y) + 0.5F) * cell_size,
+        (static_cast<float>(coord.z) + 0.5F) * cell_size,
+    };
+}
+
+[[nodiscard]] bool cell_may_intersect_field_of_view(
+    Vector3 position,
+    CellCoord coord,
+    float cell_size,
+    Vector3 forward,
+    float field_of_view_degrees) noexcept
+{
+    if (field_of_view_degrees >= 359.999F) {
+        return true;
+    }
+    if (field_of_view_degrees <= 0.0F) {
+        return false;
+    }
+
+    const Vector3 forward_direction = math::normalize_safe(forward);
+    if (math::length_squared(forward_direction) <= 0.000001F) {
+        return true;
+    }
+
+    const Vector3 offset = math::subtract(cell_center(coord, cell_size), position);
+    const float distance = math::length(offset);
+    constexpr float half_diagonal_scale = 0.8660254037844386F;
+    const float cell_bounding_radius = cell_size * half_diagonal_scale;
+    if (distance <= cell_bounding_radius || distance <= 0.000001F) {
+        return true;
+    }
+
+    const float half_angle = field_of_view_degrees * (std::numbers::pi_v<float> / 180.0F) * 0.5F;
+    const float angular_margin = std::asin(std::clamp(cell_bounding_radius / distance, 0.0F, 1.0F));
+    const float conservative_half_angle = std::min(std::numbers::pi_v<float>, half_angle + angular_margin);
+    const float minimum_dot = std::cos(conservative_half_angle);
+    const Vector3 direction = math::scale(offset, 1.0F / distance);
+    return math::dot(forward_direction, direction) >= minimum_dot;
 }
 
 } // namespace
@@ -135,6 +180,50 @@ void SpatialHash3D::query_cell_aggregates(
             for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
                 ++diagnostics.visited_cells;
                 const auto found = cells_.find(CellCoord{x, y, z});
+                if (found == cells_.end()) {
+                    continue;
+                }
+
+                ++diagnostics.candidates_tested;
+                const CellAggregate& aggregate = found->second.aggregate;
+                const auto offset = math::subtract(aggregate.centroid, position);
+                if (math::length_squared(offset) <= radius_squared) {
+                    result.push_back(aggregate);
+                }
+            }
+        }
+    }
+}
+
+void SpatialHash3D::query_visible_cell_aggregates(
+    Vector3 position,
+    float radius,
+    Vector3 forward,
+    float field_of_view_degrees,
+    std::vector<CellAggregate>& result,
+    NeighborQueryDiagnostics& diagnostics) const
+{
+    result.clear();
+    diagnostics = NeighborQueryDiagnostics{};
+    if (radius < 0.0F) {
+        return;
+    }
+
+    const auto center = cell_for(position);
+    const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
+    const float radius_squared = radius * radius;
+
+    for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
+        for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
+            for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
+                const CellCoord coord{x, y, z};
+                if (!cell_may_intersect_field_of_view(
+                        position, coord, cell_size_, forward, field_of_view_degrees)) {
+                    continue;
+                }
+
+                ++diagnostics.visited_cells;
+                const auto found = cells_.find(coord);
                 if (found == cells_.end()) {
                     continue;
                 }

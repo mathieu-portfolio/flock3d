@@ -35,7 +35,10 @@ float compute_effective_perception_radius(const SimulationParameters& parameters
     // Adaptive metric-topological perception: shrink dense neighborhoods and expand sparse ones by scaling
     // base_radius with sqrt(target_neighbor_count / max(local_candidate_count, 1)), then clamp to tunable bounds.
     const float unclamped_radius = base_radius * std::sqrt(target_count / local_count);
-    const auto [minimum_radius, maximum_radius] = std::minmax(min_perception_radius(parameters), max_perception_radius(parameters));
+    const float minimum_configured_radius = min_perception_radius(parameters);
+    const float maximum_configured_radius = max_perception_radius(parameters);
+    const auto [minimum_radius, maximum_radius] =
+        std::minmax(minimum_configured_radius, maximum_configured_radius);
     return std::clamp(unclamped_radius, minimum_radius, maximum_radius);
 }
 
