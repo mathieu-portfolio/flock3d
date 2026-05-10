@@ -41,6 +41,7 @@ struct BenchmarkOptions {
     double sample_seconds{default_sample_seconds};
     double warmup_seconds{default_warmup_seconds};
     std::vector<std::uint32_t> thread_counts{1U, 2U, 4U};
+    std::vector<std::uint32_t> boid_counts{64U, 128U, 256U, 384U};
 };
 
 inline void append_hardware_thread_count(std::vector<std::uint32_t>& thread_counts)
@@ -55,7 +56,7 @@ inline void append_hardware_thread_count(std::vector<std::uint32_t>& thread_coun
     }
 }
 
-inline std::vector<std::uint32_t> parse_thread_counts(std::string_view text)
+inline std::vector<std::uint32_t> parse_positive_counts(std::string_view text)
 {
     std::vector<std::uint32_t> values;
     std::size_t offset = 0U;
@@ -160,7 +161,7 @@ struct UpdateStats {
 inline void print_usage(std::string_view executable)
 {
     std::cerr << "Usage: " << executable
-              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds] [--threads 1,2,4]\n"
+              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds] [--threads 1,2,4] [--counts 64,128]\n"
               << "CSV is printed to stdout. Benchmarks advance simulated time as fast as possible; progress is printed to stderr only when stderr is a terminal.\n";
 }
 
@@ -187,7 +188,9 @@ inline BenchmarkOptions parse_options(int argc, char** argv)
         } else if (argument == "--warmup") {
             options.warmup_seconds = std::max(0.0, value);
         } else if (argument == "--threads") {
-            options.thread_counts = parse_thread_counts(argv[index]);
+            options.thread_counts = parse_positive_counts(argv[index]);
+        } else if (argument == "--counts" || argument == "--boid-counts") {
+            options.boid_counts = parse_positive_counts(argv[index]);
         } else {
             print_usage(argv[0]);
             std::exit(EXIT_FAILURE);
@@ -272,11 +275,6 @@ public:
 private:
     bool enabled_{};
 };
-
-inline std::vector<std::uint32_t> benchmark_boid_counts()
-{
-    return {64U, 128U, 256U, 384U};
-}
 
 inline SimulationParameters base_parameters(std::uint32_t boid_count, std::uint32_t seed)
 {

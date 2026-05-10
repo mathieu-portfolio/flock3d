@@ -168,7 +168,7 @@ int main(int argc, char** argv)
                  "aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,"
                  "aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,"
                  "social_weight_sum_mean,flock_spread,polarization\n";
-    for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
+    for (const std::uint32_t boid_count : options.boid_counts) {
         for (const AggregateSocialVariant& variant : variants) {
             for (const std::uint32_t thread_count : options.thread_counts) {
                 run_scenario(variant, boid_count, options, progress, thread_count);

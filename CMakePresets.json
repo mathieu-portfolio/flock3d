@@ -39,6 +39,31 @@
       "generator": "Ninja"
     },
     {
+      "name": "ci-base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "ci-debug-ninja",
+      "displayName": "CI Debug (Ninja)",
+      "inherits": "ci-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "ci-release-ninja",
+      "displayName": "CI Release (Ninja)",
+      "inherits": "ci-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "debug-vs2022",
       "displayName": "Debug (VS2022 + vcpkg)",
       "inherits": "base",
@@ -101,6 +126,27 @@
       ]
     },
     {
+      "name": "ci-benchmark-ninja",
+      "displayName": "CI Release benchmark targets (Ninja)",
+      "configurePreset": "ci-release-ninja",
+      "targets": [
+        "flock3d_spatial_hash_benchmark",
+        "flock3d_simulation_update_benchmark",
+        "flock3d_metrics_benchmark",
+        "flock3d_noise_benchmark",
+        "flock3d_aggregate_social_benchmark",
+        "flock3d_simulation_ticks_benchmark"
+      ]
+    },
+    {
+      "name": "ci-debug-ninja",
+      "configurePreset": "ci-debug-ninja"
+    },
+    {
+      "name": "ci-release-ninja",
+      "configurePreset": "ci-release-ninja"
+    },
+    {
       "name": "debug-vs2022",
       "configurePreset": "debug-vs2022",
       "configuration": "Debug"
@@ -143,6 +189,14 @@
       "output": {
         "outputOnFailure": true
       }
+    },
+    {
+      "name": "ci-debug-ninja",
+      "configurePreset": "ci-debug-ninja"
+    },
+    {
+      "name": "ci-release-ninja",
+      "configurePreset": "ci-release-ninja"
     },
     {
       "name": "debug-vs2022",

@@ -1,0 +1,41 @@
+name: Smoke Benchmarks
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  benchmark-smoke:
+    name: Release benchmark smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CMAKE_PRESET: ci-release-ninja
+      OUTPUT_DIR: outputs/benchmarks/smoke
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config \
+            libasound2-dev libgl1-mesa-dev libglu1-mesa-dev \
+            libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev \
+            libxrandr-dev libxxf86vm-dev
+
+      - name: Run quick benchmark smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${OUTPUT_DIR}"
+          scripts/run_benchmark.sh --preset "${CMAKE_PRESET}" --output-dir "${OUTPUT_DIR}" \
+            --duration 0.1 --sample 0.1 --warmup 0 simulation_update -- --counts 16 --threads 1
+
+      - name: Upload smoke CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: flock3d-smoke-benchmark-${{ github.run_id }}
+          path: ${{ env.OUTPUT_DIR }}/**
+          if-no-files-found: error

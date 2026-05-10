@@ -73,7 +73,7 @@ int main(int argc, char** argv)
     ProgressBar progress{flock3d::bench::progress_enabled()};
 
     std::cout << "scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
-    for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
+    for (const std::uint32_t boid_count : options.boid_counts) {
         run_scenario("no_metrics", false, boid_count, options, progress);
         run_scenario("metrics_pointer", true, boid_count, options, progress);
     }

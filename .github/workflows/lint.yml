@@ -1,0 +1,29 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scripts-and-presets:
+    name: Script and preset checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install lint tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck cmake python3
+
+      - name: Check shell scripts
+        run: shellcheck scripts/*.sh
+
+      - name: Compile Python scripts
+        run: python3 -m compileall scripts
+
+      - name: Validate CMake presets
+        run: cmake --list-presets=all

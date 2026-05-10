@@ -35,6 +35,7 @@ The focused benchmarks accept the same lightweight simulated-time options:
 --sample seconds     # simulated CSV sample window length, default 5
 --warmup seconds     # simulated warm-up per scenario, default 1
 --threads 1,2,4      # comma-separated CPU worker counts, default 1,2,4 plus hardware_concurrency when available
+--counts 64,128      # comma-separated boid counts for focused benchmarks, default 64,128,256,384
 ```
 
 CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal.
@@ -73,7 +74,7 @@ Use `--preset`, `--output-dir`, or the `FLOCK3D_BENCHMARK_*` environment variabl
 
 ```bash
 scripts/run_benchmark.sh --preset release-ninja --output-dir outputs/benchmarks/nightly all -- --duration 10
-scripts/run_benchmark.sh simulation_update -- --threads 1,2,4,8 --duration 2 --sample 0.5
+scripts/run_benchmark.sh simulation_update -- --threads 1,2,4,8 --counts 128,256 --duration 2 --sample 0.5
 ```
 
 ## Plot benchmark output
