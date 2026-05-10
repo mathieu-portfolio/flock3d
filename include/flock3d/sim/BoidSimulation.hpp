@@ -52,10 +52,14 @@ private:
     void wrap_position(Vector3& position) const noexcept;
     void rebuild_spatial_hash();
     [[nodiscard]] bool neighbor_in_field_of_view(Vector3 velocity, Vector3 offset) const noexcept;
+    [[nodiscard]] float field_of_view_minimum_dot() const noexcept;
     [[nodiscard]] float social_perception_weight(
-        Vector3 velocity,
+        Vector3 normalized_velocity,
         Vector3 offset,
-        float social_radius,
+        float distance_squared,
+        float inverse_social_radius,
+        float minimum_field_of_view_dot,
+        bool has_forward_direction,
         bool use_front_weighting) const noexcept;
     [[nodiscard]] Vector3 bird_altitude_acceleration(Vector3 position) const noexcept;
     [[nodiscard]] Vector3 fish_medium_acceleration(Vector3 position, Vector3 velocity) const noexcept;
