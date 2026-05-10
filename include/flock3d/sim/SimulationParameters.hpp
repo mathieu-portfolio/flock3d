@@ -39,6 +39,7 @@ struct SimulationParameters {
     // A zero max keeps legacy uncapped metric-neighbor behavior.
     std::size_t max_selected_neighbors{0U};
     bool adaptive_perception_enabled{false};
+    bool aggregate_social_field_of_view_enabled{false};
     NeighborMode neighbor_mode{NeighborMode::FixedRadiusUncapped};
     float separation_radius{2.0F};
     float separation_weight{1.5F};

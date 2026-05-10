@@ -6,7 +6,7 @@ These benchmark executables are for performance diagnosis before optimization. T
 
 Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks therefore use boid counts below 512 by default (`64`, `128`, `256`, and `384`). This keeps runs practical while still making time-series slowdown visible.
 
-Focused benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. CSV output therefore makes simulated time (`elapsed_seconds`/`simulated_seconds` and `simulated_ticks`) separate from measured CPU time (`sample_wall_seconds`/`total_wall_seconds`). Prefer `mean_ns_per_tick`, `ticks_per_second`, `updates_per_second`, `ticks_in_sample`, and `real_time_factor` when comparing runs; legacy millisecond columns remain for existing CSV tooling. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
+Focused benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. CSV output therefore makes simulated time (`elapsed_seconds`/`simulated_seconds` and `simulated_ticks`) separate from measured CPU time (`sample_wall_seconds`/`total_wall_seconds`). Prefer the benchmark-specific primary timing column (`mean_update_ms`, `mean_ns_per_tick`, or `mean_spatial_query_ns_per_tick`) when comparing runs; legacy millisecond columns remain where they make the compact CSV easier to read. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
 
 ## Build
 
@@ -59,6 +59,7 @@ scripts/run_benchmark.sh simulation_update
 scripts/run_benchmark.sh spatial_hash
 scripts/run_benchmark.sh metrics
 scripts/run_benchmark.sh noise
+scripts/run_benchmark.sh aggregate_social
 ```
 
 For a quick smoke run while changing benchmark code, shorten the duration and sample window:
@@ -93,7 +94,7 @@ Generate plots for benchmark CSV files already present under `outputs/benchmarks
 scripts/plot_benchmarks.sh
 ```
 
-The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, simulated-time plots for tick cost/throughput metrics, and diagnostic plots for candidate counts, visited-cell counts, topology truncation, aggregate-cell work, and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
+The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, simulated-time plots for each target's available timing metrics, and diagnostic plots for candidate counts, visited-cell counts, topology truncation, aggregate-cell work, and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
 
 ```bash
 scripts/plot_benchmarks.sh --input-dir outputs/benchmarks/nightly --output-dir outputs/benchmarks/nightly_plots
@@ -123,35 +124,48 @@ mkdir -p outputs/benchmarks
 
 ./build/release/bin/flock3d_noise_benchmark \
   > outputs/benchmarks/noise.csv
+
+./build/release/bin/flock3d_aggregate_social_benchmark \
+  > outputs/benchmarks/aggregate_social.csv
 ```
+
+## Which benchmark should I run?
+
+- Use `simulation_update` for concise end-to-end model update timing across the main models and non-aggregate neighbor modes.
+- Use `aggregate_social` for visibility-aware `cell_aggregate_social` cost and behavior diagnostics.
+- Use `spatial_hash` for rebuild/query/cell occupancy questions.
+- Use `metrics` for the cost of collecting `SimulationMetrics`.
+- Use `noise` for deterministic noise-mode overhead.
+- Use `simulation_ticks` for compact fixed-tick throughput summaries over larger counts.
 
 ## Benchmark targets
 
 ### `flock3d_simulation_update_benchmark`
 
-Measures total `BoidSimulation::update` cost for these models while collecting the neighbor diagnostics needed to compare bounded and unbounded neighbor processing:
+Purpose: concise end-to-end `BoidSimulation::update` timing for the main simulation models. Run this benchmark when the question is “which model or neighbor-mode family is slower overall?” and not when you need detailed spatial-hash, metrics, noise, or aggregate-social diagnostics.
+
+Models:
 
 - `ClassicBoids`
 - `BirdFlight`
 - `FishSchool`
 - `NoiseExperiment`
 
-The benchmark runs four neighbor modes for each model and boid count:
+Neighbor modes:
 
-- `fixed_radius_uncapped`: classic metric-neighbor behavior. Every visible boid inside the fixed perception radius contributes to alignment, cohesion, and separation. This is the fixed-radius baseline and remains available for regression comparisons.
-- `fixed_radius_closest_k`: fixed metric perception radius, followed by deterministic closest-K topological selection. Candidates are ordered by squared distance with boid index as the tie-breaker, and only `max_selected_neighbors` are used for steering.
-- `adaptive_radius_closest_k`: first queries a broad perception range, estimates local density, adapts the effective radius, then applies closest-K selection. The radius formula is `base_perception_radius * sqrt(target_neighbor_count / max(local_candidate_count, 1))`, clamped between `min_perception_radius` and `max_perception_radius`. Dense neighborhoods shrink toward the minimum; sparse neighborhoods expand toward the maximum.
-- `cell_aggregate_social`: uses exact individual boids only for close-range separation, then uses cached occupied-cell centroids for cohesion and cached occupied-cell average velocities for alignment. Social cells are weighted by boid count after excluding the current boid from its own cell, then modulated by distance falloff and front-weighting inside model FOV cones. When adaptive perception is enabled, aggregate steering queries up to the configured maximum perception radius, estimates local aggregate density, and applies the same clamped adaptive social radius used by individual-neighbor modes. This keeps collision/near-overlap avoidance exact while reducing dense-cluster social steering from per-boid iteration to visibility-filtered per-cell iteration. It differs from closest-K because closest-K still scans and ranks individual candidates for all social forces; cell aggregates replace social individual neighbors with local cell summaries.
+- `fixed_radius_uncapped`
+- `fixed_radius_closest_k`
+- `adaptive_radius_closest_k`
 
-Adaptive perception changes which neighbors are sensed before topological selection. Adaptive separation is intentionally **not** part of this refactor; separation continues to use the selected-neighbor list and the existing fixed `separation_radius` gate. In `cell_aggregate_social`, separation uses its own exact fixed `separation_radius` query and 360° perception, independent of the aggregate social query.
+The aggregate-social mode is intentionally measured by `flock3d_aggregate_social_benchmark` so this general timing CSV stays compact.
 
 Columns:
 
 ```text
-scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,query_radius,spatial_cell_size,max_selected_neighbors,target_neighbor_count,field_of_view_degrees,max_turn_rate,drag_coefficient,steering_noise_strength,perception_noise_strength,velocity_noise_strength,effective_radius_mean,selected_neighbors_mean,accepted_before_topology_mean,topology_truncated_mean,topology_truncation_rate,fov_rejected_mean,radius_rejected_mean,candidates_per_query,max_candidates_per_query,effective_neighbors_per_query,max_effective_neighbors_per_query,visited_cells_per_query,spatial_cell_count,avg_cell_occupancy,max_cell_occupancy,exact_separation_neighbors_mean,aggregate_visited_cells_per_query,aggregate_candidate_cells_per_query,aggregate_radius_rejected_cells_mean,aggregate_fov_rejected_cells_mean,total_spatial_visited_cells_per_query,total_spatial_candidates_per_query,aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,nearest_neighbor_distance,average_speed,altitude_variance,stall_count,near_ground_count,depth_variance,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor
+scenario,model,boid_count,elapsed_seconds,sample_index,iterations_in_sample,neighbor_mode,mean_update_ms,min_update_ms,max_update_ms
 ```
 
-To compare all neighbor modes directly, including `cell_aggregate_social`, run:
+Run it when you want a compact model/mode timing comparison:
 
 ```bash
 scripts/run_benchmark.sh simulation_update
@@ -163,6 +177,29 @@ For a quick local comparison while tuning neighbor parameters, shorten the run:
 scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update
 ```
 
+
+### `flock3d_aggregate_social_benchmark`
+
+Purpose: isolate the cost and behavior impact of visibility-aware `cell_aggregate_social` steering. Run this benchmark when the question is “what does aggregate social steering cost, and how do FOV and adaptive social radius change aggregate-cell work and flock behavior?”
+
+Compared modes:
+
+- `cell_aggregate_social_no_fov`
+- `cell_aggregate_social_fov`
+- `cell_aggregate_social_adaptive_radius`
+- `cell_aggregate_social_fov_adaptive_radius`
+
+Columns:
+
+```text
+scenario,aggregate_social_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,aggregate_social_enabled,social_fov_enabled,adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,social_weight_sum_mean,flock_spread,polarization
+```
+
+Run it when tuning aggregate social visibility or adaptive-radius behavior:
+
+```bash
+scripts/run_benchmark.sh aggregate_social
+```
 
 ### `flock3d_simulation_ticks_benchmark`
 
@@ -250,4 +287,4 @@ This benchmark helps decide whether deterministic noise generation should be opt
 
 ## Interpreting time-series rows
 
-Rows with the same scenario/model/mode and boid count are ordered by `sample_index`, and `elapsed_seconds` is simulated elapsed time kept for CSV compatibility. Use `simulated_seconds`/`simulated_ticks` for simulation progress, `ticks_in_sample` for the deterministic work size, `sample_wall_seconds` for measured CPU elapsed time, `mean_ns_per_tick` for per-tick cost, `p50_*`/`p95_*` for stable latency, and `ticks_per_second`/`updates_per_second`/`real_time_factor` for throughput. Inspect how tick cost, p95 latency, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.
+Rows with the same scenario/model/mode and boid count are ordered by `sample_index`, and `elapsed_seconds` is simulated elapsed time kept for CSV compatibility. Use `simulated_seconds`/`simulated_ticks` where present for simulation progress, `ticks_in_sample`/`iterations_in_sample` for the deterministic work size, `sample_wall_seconds` where present for measured CPU elapsed time, the target-specific primary timing column for per-window cost, and `p50_*`/`p95_*` or throughput columns where those are part of the target schema. Inspect how tick cost, p95 latency, candidate counts, effective neighbors, exact separation neighbors, aggregate cells used, social weight, flock spread (`flock_spread`), nearest-neighbor distance, polarization, and average speed change from early to late windows in the benchmark targets that expose those diagnostics. If update time rises with effective neighbors and max occupancy, clustering and neighbor filtering are likely first optimization targets. If rebuild time grows independently of neighbor counts, focus on spatial hash construction. If the metrics or noise benchmark shows a large delta from its baseline mode, optimize that path before parallelizing.

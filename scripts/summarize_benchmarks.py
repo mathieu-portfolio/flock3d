@@ -22,10 +22,11 @@ class SummarySpec:
 
 
 BENCHMARKS: tuple[SummarySpec, ...] = (
-    SummarySpec("simulation_update", "simulation_update.csv", ("scenario", "model", "neighbor_mode"), "mean_ns_per_tick"),
+    SummarySpec("simulation_update", "simulation_update.csv", ("scenario", "model", "neighbor_mode"), "mean_update_ms"),
     SummarySpec("spatial_hash", "spatial_hash.csv", ("scenario",), "mean_spatial_query_ns_per_tick"),
     SummarySpec("metrics", "metrics.csv", ("scenario", "metric_mode"), "mean_ns_per_tick"),
     SummarySpec("noise", "noise.csv", ("scenario", "noise_mode"), "mean_ns_per_tick"),
+    SummarySpec("aggregate_social", "aggregate_social.csv", ("scenario", "aggregate_social_mode"), "mean_update_ms"),
     SummarySpec(
         "simulation_ticks",
         "simulation_ticks.csv",

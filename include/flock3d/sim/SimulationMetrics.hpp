@@ -14,6 +14,7 @@ struct SimulationMetrics {
     std::uint64_t neighbor_total{};
     std::uint64_t selected_neighbors_total{};
     std::uint64_t exact_separation_neighbors_total{};
+    std::size_t exact_separation_neighbors_max{};
     std::uint64_t aggregate_cells_used_total{};
     double social_weight_sum_total{};
     std::uint64_t accepted_neighbors_before_topology_total{};
@@ -78,6 +79,7 @@ struct SimulationMetrics {
         neighbor_total = 0;
         selected_neighbors_total = 0;
         exact_separation_neighbors_total = 0;
+        exact_separation_neighbors_max = 0;
         aggregate_cells_used_total = 0;
         social_weight_sum_total = 0.0;
         accepted_neighbors_before_topology_total = 0;
@@ -182,6 +184,7 @@ struct SimulationMetrics {
         double social_weight_sum) noexcept
     {
         exact_separation_neighbors_total += exact_separation_neighbors;
+        exact_separation_neighbors_max = std::max(exact_separation_neighbors_max, exact_separation_neighbors);
         aggregate_cells_used_total += aggregate_cells_used;
         social_weight_sum_total += social_weight_sum;
     }
