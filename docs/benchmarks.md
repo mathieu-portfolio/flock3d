@@ -34,6 +34,7 @@ The focused benchmarks accept the same lightweight simulated-time options:
 --duration seconds   # simulated duration per scenario, default 20
 --sample seconds     # simulated CSV sample window length, default 5
 --warmup seconds     # simulated warm-up per scenario, default 1
+--threads 1,2,4      # comma-separated CPU worker counts, default 1,2,4 plus hardware_concurrency when available
 ```
 
 CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal.
@@ -72,6 +73,7 @@ Use `--preset`, `--output-dir`, or the `FLOCK3D_BENCHMARK_*` environment variabl
 
 ```bash
 scripts/run_benchmark.sh --preset release-ninja --output-dir outputs/benchmarks/nightly all -- --duration 10
+scripts/run_benchmark.sh simulation_update -- --threads 1,2,4,8 --duration 2 --sample 0.5
 ```
 
 ## Plot benchmark output
@@ -162,7 +164,7 @@ The aggregate-social mode is intentionally measured by `flock3d_aggregate_social
 Columns:
 
 ```text
-scenario,model,boid_count,elapsed_seconds,sample_index,iterations_in_sample,neighbor_mode,mean_update_ms,min_update_ms,max_update_ms
+scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread
 ```
 
 Run it when you want a compact model/mode timing comparison:
@@ -174,8 +176,11 @@ scripts/run_benchmark.sh simulation_update
 For a quick local comparison while tuning neighbor parameters, shorten the run:
 
 ```bash
-scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update
+scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update -- --threads 1,2,4
 ```
+
+Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, and `speedup_vs_single_thread` across worker counts. Exact speedup varies by CPU core count, operating-system scheduler, flock size, and neighbor mode; small boid counts can show little or negative scaling because worker startup overhead is still included in the timed update.
+
 
 
 ### `flock3d_aggregate_social_benchmark`
@@ -192,7 +197,7 @@ Compared modes:
 Columns:
 
 ```text
-scenario,aggregate_social_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,aggregate_social_enabled,social_fov_enabled,adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,social_weight_sum_mean,flock_spread,polarization
+scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,aggregate_social_enabled,social_fov_enabled,adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,social_weight_sum_mean,flock_spread,polarization
 ```
 
 Run it when tuning aggregate social visibility or adaptive-radius behavior:

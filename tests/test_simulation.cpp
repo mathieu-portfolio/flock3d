@@ -892,3 +892,47 @@ TEST_CASE("All neighbor modes remain available", "[simulation][neighbors]")
     CHECK(static_cast<int>(flock3d::sim::NeighborMode::AdaptiveRadiusClosestK) == 2);
     CHECK(static_cast<int>(flock3d::sim::NeighborMode::CellAggregateSocial) == 3);
 }
+
+TEST_CASE("BoidSimulation threaded updates preserve finite state and boid count", "[simulation][threads]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::ClassicBoids).simulation_parameters;
+    parameters.boid_count = 96U;
+    parameters.random_seed = 42U;
+    parameters.thread_count = 4U;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    for (int step = 0; step < 8; ++step) {
+        simulation.update(1.0F / 120.0F, nullptr);
+    }
+
+    REQUIRE(simulation.positions().size() == 96U);
+    REQUIRE(simulation.velocities().size() == 96U);
+    for (std::size_t i = 0; i < simulation.positions().size(); ++i) {
+        CHECK(std::isfinite(simulation.positions()[i].x));
+        CHECK(std::isfinite(simulation.positions()[i].y));
+        CHECK(std::isfinite(simulation.positions()[i].z));
+        CHECK(std::isfinite(simulation.velocities()[i].x));
+        CHECK(std::isfinite(simulation.velocities()[i].y));
+        CHECK(std::isfinite(simulation.velocities()[i].z));
+    }
+}
+
+TEST_CASE("BoidSimulation threaded updates match deterministic serial trajectory", "[simulation][threads][determinism]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::NoiseExperiment).simulation_parameters;
+    parameters.boid_count = 80U;
+    parameters.random_seed = 99U;
+    parameters.thread_count = 1U;
+    flock3d::sim::BoidSimulation serial{parameters};
+
+    parameters.thread_count = 4U;
+    flock3d::sim::BoidSimulation threaded{parameters};
+
+    for (int step = 0; step < 6; ++step) {
+        serial.update(1.0F / 120.0F, nullptr);
+        threaded.update(1.0F / 120.0F, nullptr);
+    }
+
+    REQUIRE(serial.positions().size() == threaded.positions().size());
+    CHECK(trajectory_distance(serial, threaded) == Catch::Approx(0.0).margin(0.0));
+}

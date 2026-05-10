@@ -29,6 +29,7 @@ public:
     [[nodiscard]] const SimulationParameters& parameters() const noexcept { return parameters_; }
     [[nodiscard]] SimulationParameters& parameters() noexcept { return parameters_; }
     [[nodiscard]] std::size_t size() const noexcept { return positions_.size(); }
+    [[nodiscard]] std::uint32_t effective_thread_count() const noexcept;
 
 private:
     struct ModelBehavior {

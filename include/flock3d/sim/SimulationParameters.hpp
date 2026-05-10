@@ -71,6 +71,8 @@ struct SimulationParameters {
     float velocity_noise_strength{0.0F};
     std::uint32_t noise_seed_offset{10'000U};
     bool noise_enabled{false};
+    // 0 selects a conservative automatic CPU worker count; 1 preserves the serial update path.
+    std::uint32_t thread_count{1U};
 };
 
 [[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept

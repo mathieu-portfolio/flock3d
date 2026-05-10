@@ -11,6 +11,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -39,7 +40,44 @@ struct BenchmarkOptions {
     double duration_seconds{default_duration_seconds};
     double sample_seconds{default_sample_seconds};
     double warmup_seconds{default_warmup_seconds};
+    std::vector<std::uint32_t> thread_counts{1U, 2U, 4U};
 };
+
+inline void append_hardware_thread_count(std::vector<std::uint32_t>& thread_counts)
+{
+    const unsigned int hardware_threads = std::thread::hardware_concurrency();
+    if (hardware_threads == 0U) {
+        return;
+    }
+    const auto value = static_cast<std::uint32_t>(hardware_threads);
+    if (std::find(thread_counts.begin(), thread_counts.end(), value) == thread_counts.end()) {
+        thread_counts.push_back(value);
+    }
+}
+
+inline std::vector<std::uint32_t> parse_thread_counts(std::string_view text)
+{
+    std::vector<std::uint32_t> values;
+    std::size_t offset = 0U;
+    while (offset <= text.size()) {
+        const std::size_t comma = text.find(',', offset);
+        const std::string_view token = text.substr(offset, comma == std::string_view::npos ? std::string_view::npos : comma - offset);
+        if (!token.empty()) {
+            const auto value = static_cast<std::uint32_t>(std::max(1, std::atoi(std::string{token}.c_str())));
+            if (std::find(values.begin(), values.end(), value) == values.end()) {
+                values.push_back(value);
+            }
+        }
+        if (comma == std::string_view::npos) {
+            break;
+        }
+        offset = comma + 1U;
+    }
+    if (values.empty()) {
+        values.push_back(1U);
+    }
+    return values;
+}
 
 struct UpdateStats {
     std::size_t count{};
@@ -122,13 +160,14 @@ struct UpdateStats {
 inline void print_usage(std::string_view executable)
 {
     std::cerr << "Usage: " << executable
-              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds]\n"
+              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds] [--threads 1,2,4]\n"
               << "CSV is printed to stdout. Benchmarks advance simulated time as fast as possible; progress is printed to stderr only when stderr is a terminal.\n";
 }
 
 inline BenchmarkOptions parse_options(int argc, char** argv)
 {
     BenchmarkOptions options{};
+    append_hardware_thread_count(options.thread_counts);
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument{argv[index]};
         if (argument == "--help" || argument == "-h") {
@@ -147,6 +186,8 @@ inline BenchmarkOptions parse_options(int argc, char** argv)
             options.sample_seconds = std::max(0.001, value);
         } else if (argument == "--warmup") {
             options.warmup_seconds = std::max(0.0, value);
+        } else if (argument == "--threads") {
+            options.thread_counts = parse_thread_counts(argv[index]);
         } else {
             print_usage(argv[0]);
             std::exit(EXIT_FAILURE);

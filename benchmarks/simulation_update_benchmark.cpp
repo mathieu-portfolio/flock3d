@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <iostream>
 #include <string_view>
+#include <vector>
 
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
@@ -39,10 +40,13 @@ void run_scenario(
     std::uint32_t boid_count,
     NeighborMode neighbor_mode,
     const BenchmarkOptions& options,
-    ProgressBar& progress)
+    ProgressBar& progress,
+    std::uint32_t thread_count,
+    std::vector<double>& single_thread_sample_means)
 {
     auto parameters = flock3d::bench::parameters_for_model(model, boid_count, 12'345U + boid_count);
     apply_neighbor_mode(parameters, neighbor_mode);
+    parameters.thread_count = thread_count;
     flock3d::sim::BoidSimulation simulation{parameters};
     const std::size_t warmup_ticks = flock3d::bench::simulated_seconds_to_ticks(options.warmup_seconds);
     for (std::size_t tick = 0; tick < warmup_ticks; ++tick) {
@@ -72,10 +76,17 @@ void run_scenario(
         }
 
         const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
-        std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << boid_count << ',' << std::fixed
-                  << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
-                  << neighbor_mode.name << ',' << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms
-                  << '\n';
+        if (thread_count == 1U) {
+            single_thread_sample_means.push_back(stats.mean_ms());
+        }
+        const double single_thread_mean = static_cast<std::size_t>(sample_index) < single_thread_sample_means.size()
+            ? single_thread_sample_means[static_cast<std::size_t>(sample_index)]
+            : stats.mean_ms();
+        const double speedup = stats.mean_ms() > 0.0 ? single_thread_mean / stats.mean_ms() : 0.0;
+        std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << neighbor_mode.name << ',' << boid_count
+                  << ',' << thread_count << ',' << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
+                  << ',' << stats.count << ',' << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms
+                  << ',' << speedup << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -94,8 +105,8 @@ int main(int argc, char** argv)
         NeighborMode{"adaptive_radius_closest_k", true, 32U, flock3d::sim::NeighborMode::AdaptiveRadiusClosestK},
     };
 
-    std::cout << "scenario,model,boid_count,elapsed_seconds,sample_index,iterations_in_sample,neighbor_mode,"
-                 "mean_update_ms,min_update_ms,max_update_ms\n";
+    std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
+                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread\n";
     for (const auto model : {
              flock3d::sim::SimulationModel::ClassicBoids,
              flock3d::sim::SimulationModel::BirdFlight,
@@ -104,7 +115,10 @@ int main(int argc, char** argv)
          }) {
         for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
             for (const NeighborMode neighbor_mode : neighbor_modes) {
-                run_scenario(model, boid_count, neighbor_mode, options, progress);
+                std::vector<double> single_thread_sample_means;
+                for (const std::uint32_t thread_count : options.thread_counts) {
+                    run_scenario(model, boid_count, neighbor_mode, options, progress, thread_count, single_thread_sample_means);
+                }
             }
         }
     }
