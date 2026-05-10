@@ -235,7 +235,7 @@ int main(int argc, char** argv)
 
     std::cout << "scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,visited_cells_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,p99_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,p99_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,p99_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const SpatialScenario& scenario : scenarios) {
-        for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
+        for (const std::uint32_t boid_count : options.boid_counts) {
             run_scenario(scenario, boid_count, options, progress);
         }
     }

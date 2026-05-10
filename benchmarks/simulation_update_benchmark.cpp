@@ -113,7 +113,7 @@ int main(int argc, char** argv)
              flock3d::sim::SimulationModel::FishSchool,
              flock3d::sim::SimulationModel::NoiseExperiment,
          }) {
-        for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
+        for (const std::uint32_t boid_count : options.boid_counts) {
             for (const NeighborMode neighbor_mode : neighbor_modes) {
                 std::vector<double> single_thread_sample_means;
                 for (const std::uint32_t thread_count : options.thread_counts) {

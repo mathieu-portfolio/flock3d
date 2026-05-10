@@ -1,0 +1,32 @@
+name: CI Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Debug build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CMAKE_PRESET: ci-debug-ninja
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config \
+            libasound2-dev libgl1-mesa-dev libglu1-mesa-dev \
+            libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev \
+            libxrandr-dev libxxf86vm-dev
+
+      - name: Build with project script
+        run: scripts/build.sh "${CMAKE_PRESET}"
+
+      - name: Run tests with project script
+        run: scripts/tests.sh "${CMAKE_PRESET}"

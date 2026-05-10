@@ -1,0 +1,169 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        description: Benchmark to run
+        required: true
+        default: simulation_update
+        type: choice
+        options:
+          - all
+          - simulation_update
+          - aggregate_social
+          - simulation_ticks
+          - spatial_hash
+          - metrics
+          - noise
+      boid_counts:
+        description: Comma-separated boid counts
+        required: true
+        default: "64,128,256"
+      thread_counts:
+        description: Comma-separated worker thread counts for focused benchmarks
+        required: true
+        default: "1,2,4"
+      scenario:
+        description: Optional exact CSV scenario filter; use all to keep every row
+        required: true
+        default: all
+      duration_seconds:
+        description: Simulated measured duration in seconds
+        required: true
+        default: "1"
+      sample_seconds:
+        description: Simulated sample window in seconds
+        required: true
+        default: "0.25"
+      warmup_seconds:
+        description: Simulated warm-up duration in seconds
+        required: true
+        default: "0"
+      repetitions:
+        description: Repetitions for simulation_ticks
+        required: true
+        default: "1"
+      runner_label:
+        description: Runner label, e.g. ubuntu-latest or self-hosted
+        required: true
+        default: ubuntu-latest
+
+jobs:
+  run-benchmarks:
+    name: Run ${{ inputs.benchmark }} benchmarks
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 90
+    env:
+      CMAKE_PRESET: ci-release-ninja
+      FLOCK3D_BENCHMARK_PRESET: ci-release-ninja
+      OUTPUT_DIR: outputs/benchmarks/github-${{ github.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config python3-pip \
+            libasound2-dev libgl1-mesa-dev libglu1-mesa-dev \
+            libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev \
+            libxrandr-dev libxxf86vm-dev
+
+      - name: Install plotting dependencies
+        run: python3 -m pip install --user pandas matplotlib
+
+      - name: Run selected benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${OUTPUT_DIR}"
+          exec > >(tee "${OUTPUT_DIR}/benchmark.log") 2>&1
+
+          echo "benchmark=${{ inputs.benchmark }}"
+          echo "boid_counts=${{ inputs.boid_counts }}"
+          echo "thread_counts=${{ inputs.thread_counts }}"
+          echo "scenario_filter=${{ inputs.scenario }}"
+          echo "preset=${FLOCK3D_BENCHMARK_PRESET} (CMAKE_BUILD_TYPE=Release)"
+
+          common_args=(--duration "${{ inputs.duration_seconds }}" --sample "${{ inputs.sample_seconds }}" --warmup "${{ inputs.warmup_seconds }}")
+          common_extra=(--counts "${{ inputs.boid_counts }}" --threads "${{ inputs.thread_counts }}")
+          ticks_extra=(--counts "${{ inputs.boid_counts }}" --repetitions "${{ inputs.repetitions }}")
+
+          run_common() {
+            local name="$1"
+            scripts/run_benchmark.sh --preset "${FLOCK3D_BENCHMARK_PRESET}" --output-dir "${OUTPUT_DIR}" "${common_args[@]}" "$name" -- "${common_extra[@]}"
+          }
+
+          run_ticks() {
+            scripts/run_benchmark.sh --preset "${FLOCK3D_BENCHMARK_PRESET}" --output-dir "${OUTPUT_DIR}" "${common_args[@]}" simulation_ticks -- "${ticks_extra[@]}"
+          }
+
+          case "${{ inputs.benchmark }}" in
+            all)
+              for name in simulation_update aggregate_social spatial_hash metrics noise; do
+                run_common "$name"
+              done
+              run_ticks
+              ;;
+            simulation_ticks)
+              run_ticks
+              ;;
+            simulation_update|aggregate_social|spatial_hash|metrics|noise)
+              run_common "${{ inputs.benchmark }}"
+              ;;
+            *)
+              echo "Unknown benchmark: ${{ inputs.benchmark }}" >&2
+              exit 2
+              ;;
+          esac
+
+
+      - name: Filter scenario rows
+        if: inputs.scenario != 'all'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+          scenario = "${{ inputs.scenario }}"
+          output_dir = Path("${{ env.OUTPUT_DIR }}")
+          matched = 0
+          for path in output_dir.glob("*.csv"):
+              with path.open(newline="") as src:
+                  reader = csv.DictReader(src)
+                  if not reader.fieldnames or "scenario" not in reader.fieldnames:
+                      continue
+                  rows = [row for row in reader if row.get("scenario") == scenario]
+              if not rows:
+                  continue
+              backup = path.with_suffix(".all.csv")
+              path.rename(backup)
+              with path.open("w", newline="") as dst:
+                  writer = csv.DictWriter(dst, fieldnames=reader.fieldnames)
+                  writer.writeheader()
+                  writer.writerows(rows)
+              matched += len(rows)
+              print(f"Filtered {path.name}: kept {len(rows)} rows; original saved as {backup.name}")
+          if matched == 0:
+              print(f"No CSV rows matched scenario={scenario!r}; unfiltered CSV files are still uploaded.")
+          PY
+
+      - name: Summarize benchmark CSV
+        shell: bash
+        run: scripts/summarize_benchmarks.py --input-dir "${OUTPUT_DIR}" --output "${OUTPUT_DIR}/benchmark_summary.csv"
+
+      - name: Generate plots
+        shell: bash
+        run: scripts/plot_benchmarks.sh --input-dir "${OUTPUT_DIR}"
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flock3d-benchmarks-${{ inputs.benchmark }}-${{ github.run_id }}
+          path: |
+            ${{ env.OUTPUT_DIR }}/**
+          if-no-files-found: error
