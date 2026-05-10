@@ -16,6 +16,14 @@ struct SimulationMetrics {
     std::uint64_t exact_separation_neighbors_total{};
     std::uint64_t aggregate_cells_used_total{};
     double social_weight_sum_total{};
+    std::uint64_t accepted_neighbors_before_topology_total{};
+    std::uint64_t topology_truncated_neighbors_total{};
+    std::uint64_t fov_rejected_neighbors_total{};
+    std::uint64_t radius_rejected_neighbors_total{};
+    std::uint64_t aggregate_visited_cells_total{};
+    std::uint64_t aggregate_candidate_cells_total{};
+    std::uint64_t aggregate_radius_rejected_cells_total{};
+    std::uint64_t aggregate_fov_rejected_cells_total{};
     double effective_radius_total{};
     std::uint64_t effective_radius_count{};
     double effective_radius_mean{};
@@ -23,6 +31,17 @@ struct SimulationMetrics {
     double exact_separation_neighbors_mean{};
     double aggregate_cells_used_mean{};
     double social_weight_sum_mean{};
+    double accepted_neighbors_before_topology_mean{};
+    double topology_truncated_neighbors_mean{};
+    double topology_truncation_rate{};
+    double fov_rejected_neighbors_mean{};
+    double radius_rejected_neighbors_mean{};
+    double aggregate_visited_cells_per_query{};
+    double aggregate_candidate_cells_per_query{};
+    double aggregate_radius_rejected_cells_mean{};
+    double aggregate_fov_rejected_cells_mean{};
+    double total_spatial_visited_cells_per_query{};
+    double total_spatial_candidates_per_query{};
     double avg_candidates_per_query{};
     std::size_t max_candidates_per_query{};
     double avg_effective_neighbors_per_query{};
@@ -61,6 +80,14 @@ struct SimulationMetrics {
         exact_separation_neighbors_total = 0;
         aggregate_cells_used_total = 0;
         social_weight_sum_total = 0.0;
+        accepted_neighbors_before_topology_total = 0;
+        topology_truncated_neighbors_total = 0;
+        fov_rejected_neighbors_total = 0;
+        radius_rejected_neighbors_total = 0;
+        aggregate_visited_cells_total = 0;
+        aggregate_candidate_cells_total = 0;
+        aggregate_radius_rejected_cells_total = 0;
+        aggregate_fov_rejected_cells_total = 0;
         effective_radius_total = 0.0;
         effective_radius_count = 0;
         effective_radius_mean = 0.0;
@@ -68,6 +95,17 @@ struct SimulationMetrics {
         exact_separation_neighbors_mean = 0.0;
         aggregate_cells_used_mean = 0.0;
         social_weight_sum_mean = 0.0;
+        accepted_neighbors_before_topology_mean = 0.0;
+        topology_truncated_neighbors_mean = 0.0;
+        topology_truncation_rate = 0.0;
+        fov_rejected_neighbors_mean = 0.0;
+        radius_rejected_neighbors_mean = 0.0;
+        aggregate_visited_cells_per_query = 0.0;
+        aggregate_candidate_cells_per_query = 0.0;
+        aggregate_radius_rejected_cells_mean = 0.0;
+        aggregate_fov_rejected_cells_mean = 0.0;
+        total_spatial_visited_cells_per_query = 0.0;
+        total_spatial_candidates_per_query = 0.0;
         avg_candidates_per_query = 0.0;
         max_candidates_per_query = 0;
         avg_effective_neighbors_per_query = 0.0;
@@ -110,6 +148,32 @@ struct SimulationMetrics {
         neighbor_total += neighbor_count;
         selected_neighbors_total += neighbor_count;
         max_effective_neighbors_per_query = std::max(max_effective_neighbors_per_query, neighbor_count);
+    }
+
+    constexpr void record_neighbor_filtering(
+        std::size_t accepted_before_topology,
+        std::size_t selected_after_topology,
+        std::size_t fov_rejected,
+        std::size_t radius_rejected) noexcept
+    {
+        accepted_neighbors_before_topology_total += accepted_before_topology;
+        topology_truncated_neighbors_total += accepted_before_topology > selected_after_topology
+            ? accepted_before_topology - selected_after_topology
+            : 0U;
+        fov_rejected_neighbors_total += fov_rejected;
+        radius_rejected_neighbors_total += radius_rejected;
+    }
+
+    constexpr void record_cell_aggregate_query(
+        std::size_t visited_cells,
+        std::size_t candidate_cells,
+        std::size_t radius_rejected_cells,
+        std::size_t fov_rejected_cells) noexcept
+    {
+        aggregate_visited_cells_total += visited_cells;
+        aggregate_candidate_cells_total += candidate_cells;
+        aggregate_radius_rejected_cells_total += radius_rejected_cells;
+        aggregate_fov_rejected_cells_total += fov_rejected_cells;
     }
 
     constexpr void record_cell_aggregate_social(
@@ -194,6 +258,39 @@ struct SimulationMetrics {
             : 0.0;
         social_weight_sum_mean = neighbor_queries > 0
             ? social_weight_sum_total / static_cast<double>(neighbor_queries)
+            : 0.0;
+        accepted_neighbors_before_topology_mean = neighbor_queries > 0
+            ? static_cast<double>(accepted_neighbors_before_topology_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        topology_truncated_neighbors_mean = neighbor_queries > 0
+            ? static_cast<double>(topology_truncated_neighbors_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        topology_truncation_rate = accepted_neighbors_before_topology_total > 0
+            ? static_cast<double>(topology_truncated_neighbors_total) / static_cast<double>(accepted_neighbors_before_topology_total)
+            : 0.0;
+        fov_rejected_neighbors_mean = neighbor_queries > 0
+            ? static_cast<double>(fov_rejected_neighbors_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        radius_rejected_neighbors_mean = neighbor_queries > 0
+            ? static_cast<double>(radius_rejected_neighbors_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        aggregate_visited_cells_per_query = neighbor_queries > 0
+            ? static_cast<double>(aggregate_visited_cells_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        aggregate_candidate_cells_per_query = neighbor_queries > 0
+            ? static_cast<double>(aggregate_candidate_cells_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        aggregate_radius_rejected_cells_mean = neighbor_queries > 0
+            ? static_cast<double>(aggregate_radius_rejected_cells_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        aggregate_fov_rejected_cells_mean = neighbor_queries > 0
+            ? static_cast<double>(aggregate_fov_rejected_cells_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        total_spatial_visited_cells_per_query = neighbor_queries > 0
+            ? static_cast<double>(visited_cells_total + aggregate_visited_cells_total) / static_cast<double>(neighbor_queries)
+            : 0.0;
+        total_spatial_candidates_per_query = neighbor_queries > 0
+            ? static_cast<double>(neighbor_candidates + aggregate_candidate_cells_total) / static_cast<double>(neighbor_queries)
             : 0.0;
         visited_cells_per_query = neighbor_queries > 0
             ? static_cast<double>(visited_cells_total) / static_cast<double>(neighbor_queries)

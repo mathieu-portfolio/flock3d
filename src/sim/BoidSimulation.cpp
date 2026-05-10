@@ -185,6 +185,8 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         const float effective_perception_radius_squared = effective_perception_radius * effective_perception_radius;
 
         selected_neighbors_.clear();
+        std::size_t fov_rejected_count = 0;
+        std::size_t radius_rejected_count = 0;
         for (const std::size_t neighbor_index : neighbor_indices_) {
             if (neighbor_index == i) {
                 continue;
@@ -192,6 +194,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
 
             Vector3 offset = math::subtract(positions_[neighbor_index], position);
             if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
+                ++fov_rejected_count;
                 continue;
             }
             if (noise_active && parameters_.perception_noise_strength > 0.0F) {
@@ -204,11 +207,13 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             }
             const float distance_squared = math::length_squared(offset);
             if (distance_squared <= 0.000001F || distance_squared > effective_perception_radius_squared) {
+                ++radius_rejected_count;
                 continue;
             }
 
             selected_neighbors_.push_back(NeighborCandidate{neighbor_index, distance_squared});
         }
+        const std::size_t accepted_before_topology = selected_neighbors_.size();
         select_closest_neighbors(selected_neighbors_, parameters_.max_selected_neighbors);
 
         Vector3 separation_sum{};
@@ -268,6 +273,11 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         if (metrics != nullptr) {
             metrics->record_effective_radius(effective_perception_radius);
             metrics->record_effective_neighbors(flock_count);
+            metrics->record_neighbor_filtering(
+                accepted_before_topology,
+                selected_neighbors_.size(),
+                fov_rejected_count,
+                radius_rejected_count);
             if (has_nearest_neighbor) {
                 metrics->record_nearest_neighbor_distance(std::sqrt(nearest_neighbor_distance_squared));
             }
@@ -350,6 +360,8 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         Vector3 weighted_centroid_sum{};
         double social_weight_sum = 0.0;
         std::size_t aggregate_cells_used = 0;
+        std::size_t aggregate_radius_rejected_count = 0;
+        std::size_t aggregate_fov_rejected_count = 0;
         const CellCoord own_cell = spatial_hash_.cell_for(position);
         for (CellAggregate aggregate : aggregate_cells_) {
             if (aggregate.coord == own_cell) {
@@ -367,9 +379,11 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
             const Vector3 offset = math::subtract(aggregate.centroid, position);
             const float distance_squared = math::length_squared(offset);
             if (distance_squared <= 0.000001F || distance_squared > social_radius_squared) {
+                ++aggregate_radius_rejected_count;
                 continue;
             }
             if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
+                ++aggregate_fov_rejected_count;
                 continue;
             }
 
@@ -391,6 +405,16 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         if (metrics != nullptr) {
             metrics->record_effective_radius(social_radius);
             metrics->record_effective_neighbors(static_cast<std::size_t>(social_weight_sum));
+            metrics->record_neighbor_filtering(
+                aggregate_cells_used,
+                aggregate_cells_used,
+                aggregate_fov_rejected_count,
+                aggregate_radius_rejected_count);
+            metrics->record_cell_aggregate_query(
+                aggregate_diagnostics.visited_cells,
+                aggregate_diagnostics.candidates_tested,
+                aggregate_radius_rejected_count,
+                aggregate_fov_rejected_count);
             metrics->record_cell_aggregate_social(separation_count, aggregate_cells_used, social_weight_sum);
             if (has_nearest_neighbor) {
                 metrics->record_nearest_neighbor_distance(std::sqrt(nearest_neighbor_distance_squared));

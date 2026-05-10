@@ -112,6 +112,11 @@ struct UpdateStats {
     {
         return percentile_ms(0.95);
     }
+
+    [[nodiscard]] double p99_ms() const
+    {
+        return percentile_ms(0.99);
+    }
 };
 
 inline void print_usage(std::string_view executable)

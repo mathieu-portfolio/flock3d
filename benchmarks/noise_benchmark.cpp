@@ -76,7 +76,7 @@ void run_scenario(const NoiseVariant& variant, std::uint32_t boid_count, const B
                   << stats.min_or_zero() << ',' << stats.max_ms << ',' << variant.steering << ',' << variant.perception
                   << ',' << variant.velocity << ',' << elapsed << ',' << simulated_ticks << ',' << ticks_in_sample << ','
                   << stats.wall_seconds() << ',' << stats.mean_ns() << ',' << stats.p50_ms() << ',' << stats.p95_ms()
-                  << ',' << stats.ticks_per_second() << ',' << stats.ticks_per_second() << ','
+                  << ',' << stats.p99_ms() << ',' << stats.ticks_per_second() << ',' << stats.ticks_per_second() << ','
                   << stats.real_time_factor() << '\n';
         ++sample_index;
     }
@@ -97,7 +97,7 @@ int main(int argc, char** argv)
         {"all_noise", 0.25F, 0.25F, 0.25F},
     };
 
-    std::cout << "scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
+    std::cout << "scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
         for (const NoiseVariant& variant : variants) {
             run_scenario(variant, boid_count, options, progress);

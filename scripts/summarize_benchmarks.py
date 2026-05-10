@@ -48,6 +48,8 @@ OUTPUT_COLUMNS = (
     "ticks_in_sample",
     "primary_metric",
     "primary_value",
+    "p95_value",
+    "p99_value",
     "iterations_in_sample",
 )
 
@@ -140,6 +142,8 @@ def latest_rows(spec: SummarySpec, input_dir: Path) -> list[dict[str, str]]:
                 "ticks_in_sample": row.get("ticks_in_sample", row.get(spec.iterations_column, "")),
                 "primary_metric": spec.primary_metric,
                 "primary_value": row.get(spec.primary_metric, ""),
+                "p95_value": row.get("p95_update_ms", row.get("p95_ms_per_tick", "")),
+                "p99_value": row.get("p99_update_ms", row.get("p99_ms_per_tick", "")),
                 "iterations_in_sample": row.get(spec.iterations_column, ""),
             }
         )
