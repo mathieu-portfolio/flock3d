@@ -5,7 +5,7 @@ on:
     inputs:
       benchmark:
         description: Benchmark to run
-        required: true
+        required: false
         default: simulation_update
         type: choice
         options:
@@ -17,47 +17,48 @@ on:
           - metrics
           - noise
       boid_counts:
-        description: Comma-separated boid counts
-        required: true
-        default: "64,128,256"
+        description: Optional comma-separated boid counts
+        required: false
       thread_counts:
-        description: Comma-separated worker thread counts for focused benchmarks
-        required: true
-        default: "1,2,4"
+        description: Optional comma-separated worker thread counts for focused benchmarks
+        required: false
       scenario:
-        description: Optional exact CSV scenario filter; use all to keep every row
-        required: true
-        default: all
+        description: Optional exact CSV scenario filter; leave blank or use all to keep every row
+        required: false
       duration_seconds:
-        description: Simulated measured duration in seconds
-        required: true
-        default: "1"
+        description: Optional simulated measured duration in seconds
+        required: false
       sample_seconds:
-        description: Simulated sample window in seconds
-        required: true
-        default: "0.25"
+        description: Optional simulated sample window in seconds
+        required: false
       warmup_seconds:
-        description: Simulated warm-up duration in seconds
-        required: true
-        default: "0"
+        description: Optional simulated warm-up duration in seconds
+        required: false
       repetitions:
-        description: Repetitions for simulation_ticks
-        required: true
-        default: "1"
+        description: Optional repetitions for simulation_ticks
+        required: false
       runner_label:
-        description: Runner label, e.g. ubuntu-latest or self-hosted
-        required: true
+        description: Optional runner label, e.g. ubuntu-latest or self-hosted
+        required: false
         default: ubuntu-latest
 
 jobs:
   run-benchmarks:
-    name: Run ${{ inputs.benchmark }} benchmarks
-    runs-on: ${{ inputs.runner_label }}
+    name: Run ${{ inputs.benchmark || 'simulation_update' }} benchmarks
+    runs-on: ${{ inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 90
     env:
       CMAKE_PRESET: ci-release-ninja
       FLOCK3D_BENCHMARK_PRESET: ci-release-ninja
       OUTPUT_DIR: outputs/benchmarks/github-${{ github.run_id }}
+      BENCHMARK: ${{ inputs.benchmark || 'simulation_update' }}
+      BOID_COUNTS: ${{ inputs.boid_counts }}
+      THREAD_COUNTS: ${{ inputs.thread_counts }}
+      SCENARIO: ${{ inputs.scenario }}
+      DURATION_SECONDS: ${{ inputs.duration_seconds }}
+      SAMPLE_SECONDS: ${{ inputs.sample_seconds }}
+      WARMUP_SECONDS: ${{ inputs.warmup_seconds }}
+      REPETITIONS: ${{ inputs.repetitions }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,15 +83,23 @@ jobs:
           mkdir -p "${OUTPUT_DIR}"
           exec > >(tee "${OUTPUT_DIR}/benchmark.log") 2>&1
 
-          echo "benchmark=${{ inputs.benchmark }}"
-          echo "boid_counts=${{ inputs.boid_counts }}"
-          echo "thread_counts=${{ inputs.thread_counts }}"
-          echo "scenario_filter=${{ inputs.scenario }}"
+          echo "benchmark=${BENCHMARK}"
+          echo "boid_counts=${BOID_COUNTS}"
+          echo "thread_counts=${THREAD_COUNTS}"
+          echo "scenario_filter=${SCENARIO}"
           echo "preset=${FLOCK3D_BENCHMARK_PRESET} (CMAKE_BUILD_TYPE=Release)"
 
-          common_args=(--duration "${{ inputs.duration_seconds }}" --sample "${{ inputs.sample_seconds }}" --warmup "${{ inputs.warmup_seconds }}")
-          common_extra=(--counts "${{ inputs.boid_counts }}" --threads "${{ inputs.thread_counts }}")
-          ticks_extra=(--counts "${{ inputs.boid_counts }}" --repetitions "${{ inputs.repetitions }}")
+          common_args=()
+          [[ -n "${DURATION_SECONDS}" ]] && common_args+=(--duration "${DURATION_SECONDS}")
+          [[ -n "${SAMPLE_SECONDS}" ]] && common_args+=(--sample "${SAMPLE_SECONDS}")
+          [[ -n "${WARMUP_SECONDS}" ]] && common_args+=(--warmup "${WARMUP_SECONDS}")
+
+          common_extra=()
+          ticks_extra=()
+          [[ -n "${BOID_COUNTS}" ]] && common_extra+=(--counts "${BOID_COUNTS}")
+          [[ -n "${BOID_COUNTS}" ]] && ticks_extra+=(--counts "${BOID_COUNTS}")
+          [[ -n "${THREAD_COUNTS}" ]] && common_extra+=(--threads "${THREAD_COUNTS}")
+          [[ -n "${REPETITIONS}" ]] && ticks_extra+=(--repetitions "${REPETITIONS}")
 
           run_common() {
             local name="$1"
@@ -101,7 +110,7 @@ jobs:
             scripts/run_benchmark.sh --preset "${FLOCK3D_BENCHMARK_PRESET}" --output-dir "${OUTPUT_DIR}" "${common_args[@]}" simulation_ticks -- "${ticks_extra[@]}"
           }
 
-          case "${{ inputs.benchmark }}" in
+          case "${BENCHMARK}" in
             all)
               for name in simulation_update aggregate_social spatial_hash metrics noise; do
                 run_common "$name"
@@ -112,24 +121,24 @@ jobs:
               run_ticks
               ;;
             simulation_update|aggregate_social|spatial_hash|metrics|noise)
-              run_common "${{ inputs.benchmark }}"
+              run_common "${BENCHMARK}"
               ;;
             *)
-              echo "Unknown benchmark: ${{ inputs.benchmark }}" >&2
+              echo "Unknown benchmark: ${BENCHMARK}" >&2
               exit 2
               ;;
           esac
 
 
       - name: Filter scenario rows
-        if: inputs.scenario != 'all'
+        if: inputs.scenario != '' && inputs.scenario != 'all'
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import csv
           from pathlib import Path
-          scenario = "${{ inputs.scenario }}"
+          scenario = "${{ env.SCENARIO }}"
           output_dir = Path("${{ env.OUTPUT_DIR }}")
           matched = 0
           for path in output_dir.glob("*.csv"):
@@ -163,7 +172,7 @@ jobs:
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: flock3d-benchmarks-${{ inputs.benchmark }}-${{ github.run_id }}
+          name: flock3d-benchmarks-${{ inputs.benchmark || 'simulation_update' }}-${{ github.run_id }}
           path: |
             ${{ env.OUTPUT_DIR }}/**
           if-no-files-found: error
