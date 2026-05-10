@@ -130,7 +130,7 @@ void print_header()
     std::cout << "scenario,boid_count,repetition,seed,dt,warmup_seconds,warmup_"
                  "ticks,simulated_seconds,"
                  "measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_"
-                 "per_tick,p95_ms_per_tick,"
+                 "per_tick,p95_ms_per_tick,p99_ms_per_tick,"
                  "max_ms_per_tick,ticks_per_second,real_time_factor,ticks_in_sample,simulated_ticks,wall_seconds,mean_ns_per_tick,updates_per_second\n";
 }
 
@@ -157,7 +157,7 @@ void run_count(std::uint32_t boid_count, const TickBenchmarkOptions &options)
                   << options.warmup_seconds << ',' << warmup_ticks << ',' << summary.simulated_seconds << ','
                   << summary.tick_count << ',' << std::setprecision(6) << summary.total_wall_seconds << ','
                   << summary.average_ms_per_tick << ',' << summary.p50_ms_per_tick << ',' << summary.p95_ms_per_tick
-                  << ',' << summary.max_ms_per_tick << ',' << summary.ticks_per_second << ','
+                  << ',' << summary.p99_ms_per_tick << ',' << summary.max_ms_per_tick << ',' << summary.ticks_per_second << ','
                   << summary.real_time_factor << ',' << summary.tick_count << ',' << summary.tick_count << ','
                   << summary.total_wall_seconds << ',' << summary.mean_ns_per_tick << ','
                   << summary.updates_per_second << '\n';

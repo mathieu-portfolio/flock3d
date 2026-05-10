@@ -31,6 +31,7 @@ struct SpatialSampleStats {
     UpdateStats spatial_query;
     UpdateStats naive_query;
     double candidates_per_query_total{};
+    double visited_cells_per_query_total{};
     double effective_neighbors_per_query_total{};
     double naive_neighbors_per_query_total{};
     double occupied_cells_total{};
@@ -40,6 +41,7 @@ struct SpatialSampleStats {
 
     void record_iteration(
         double candidates_per_query,
+        double visited_cells_per_query,
         double effective_neighbors_per_query,
         double naive_neighbors_per_query,
         std::size_t occupied_cells,
@@ -48,6 +50,7 @@ struct SpatialSampleStats {
         bool counts_match) noexcept
     {
         candidates_per_query_total += candidates_per_query;
+        visited_cells_per_query_total += visited_cells_per_query;
         effective_neighbors_per_query_total += effective_neighbors_per_query;
         naive_neighbors_per_query_total += naive_neighbors_per_query;
         occupied_cells_total += static_cast<double>(occupied_cells);
@@ -85,6 +88,7 @@ std::size_t count_neighbors_naive(const std::vector<Vector3>& positions, float r
 struct SpatialQueryResult {
     std::size_t effective_neighbors{};
     std::size_t candidates{};
+    std::size_t visited_cells{};
 };
 
 SpatialQueryResult count_neighbors_spatial(
@@ -98,6 +102,7 @@ SpatialQueryResult count_neighbors_spatial(
         flock3d::sim::NeighborQueryDiagnostics diagnostics{};
         hash.query_neighbors(positions[i], radius, neighbors, diagnostics);
         result.candidates += diagnostics.candidates_tested;
+        result.visited_cells += diagnostics.visited_cells;
         for (const std::size_t neighbor_index : neighbors) {
             if (neighbor_index != i) {
                 ++result.effective_neighbors;
@@ -167,6 +172,7 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
             const double query_count = positions.empty() ? 1.0 : static_cast<double>(positions.size());
             stats.record_iteration(
                 static_cast<double>(spatial_result.candidates) / query_count,
+                static_cast<double>(spatial_result.visited_cells) / query_count,
                 static_cast<double>(spatial_result.effective_neighbors) / query_count,
                 static_cast<double>(naive_neighbors) / query_count,
                 hash.cell_count(),
@@ -195,15 +201,18 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
                   << ',' << stats.spatial_query.min_or_zero() << ',' << stats.spatial_query.max_ms << ','
                   << stats.naive_query.mean_ms() << ',' << stats.naive_query.min_or_zero() << ','
                   << stats.naive_query.max_ms << ',' << stats.average(stats.candidates_per_query_total) << ','
+                  << stats.average(stats.visited_cells_per_query_total) << ','
                   << stats.average(stats.effective_neighbors_per_query_total) << ','
                   << stats.average(stats.naive_neighbors_per_query_total) << ','
                   << stats.average(stats.occupied_cells_total) << ',' << stats.average(stats.max_cell_occupancy_total)
                   << ',' << stats.average(stats.average_cell_occupancy_total) << ',' << stats.count_mismatches << ','
                   << elapsed << ',' << simulated_ticks << ',' << ticks_in_sample << ',' << sample_wall_seconds
                   << ',' << stats.rebuild.mean_ns() << ',' << stats.rebuild.p50_ms() << ',' << stats.rebuild.p95_ms()
-                  << ',' << stats.spatial_query.mean_ns() << ',' << stats.spatial_query.p50_ms() << ','
-                  << stats.spatial_query.p95_ms() << ',' << stats.naive_query.mean_ns() << ','
+                  << ',' << stats.rebuild.p99_ms() << ',' << stats.spatial_query.mean_ns() << ','
+                  << stats.spatial_query.p50_ms() << ',' << stats.spatial_query.p95_ms() << ','
+                  << stats.spatial_query.p99_ms() << ',' << stats.naive_query.mean_ns() << ','
                   << stats.naive_query.p50_ms() << ',' << stats.naive_query.p95_ms() << ','
+                  << stats.naive_query.p99_ms() << ','
                   << ticks_per_second << ',' << ticks_per_second << ',' << real_time_factor << '\n';
         ++sample_index;
     }
@@ -224,7 +233,7 @@ int main(int argc, char** argv)
         {"large_radius", 40.0F, 7.0F, 2.0F},
     };
 
-    std::cout << "scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor\n";
+    std::cout << "scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,visited_cells_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,p99_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,p99_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,p99_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const SpatialScenario& scenario : scenarios) {
         for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
             run_scenario(scenario, boid_count, options, progress);

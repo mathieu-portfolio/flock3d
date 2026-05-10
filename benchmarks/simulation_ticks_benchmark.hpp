@@ -46,6 +46,7 @@ struct TickSummary
     double mean_ns_per_tick{};
     double p50_ms_per_tick{};
     double p95_ms_per_tick{};
+    double p99_ms_per_tick{};
     double max_ms_per_tick{};
     double ticks_per_second{};
     double updates_per_second{};
@@ -105,6 +106,7 @@ struct TickSummary
     summary.mean_ns_per_tick = summary.average_ms_per_tick * 1'000'000.0;
     summary.p50_ms_per_tick = percentile_nearest_rank(measured_tick_ms, 0.50);
     summary.p95_ms_per_tick = percentile_nearest_rank(measured_tick_ms, 0.95);
+    summary.p99_ms_per_tick = percentile_nearest_rank(measured_tick_ms, 0.99);
     summary.max_ms_per_tick = *std::max_element(measured_tick_ms.begin(), measured_tick_ms.end());
     if (summary.total_wall_seconds > 0.0)
     {

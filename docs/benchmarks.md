@@ -93,7 +93,7 @@ Generate plots for benchmark CSV files already present under `outputs/benchmarks
 scripts/plot_benchmarks.sh
 ```
 
-The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, simulated-time plots for tick cost/throughput metrics, and spatial-hash diagnostic plots for candidate counts and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
+The plotting wrapper writes summary CSV files and PNGs under `outputs/benchmarks/plots/` by default. It creates latest-sample scaling plots, simulated-time plots for tick cost/throughput metrics, and diagnostic plots for candidate counts, visited-cell counts, topology truncation, aggregate-cell work, and cell occupancy. Use `--input-dir`, `--output-dir`, `--format`, or `--benchmarks` when plotting a specific run or benchmark family:
 
 ```bash
 scripts/plot_benchmarks.sh --input-dir outputs/benchmarks/nightly --output-dir outputs/benchmarks/nightly_plots
@@ -148,7 +148,7 @@ Adaptive perception changes which neighbors are sensed before topological select
 Columns:
 
 ```text
-scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,candidates_per_query,effective_neighbors_per_query,exact_separation_neighbors_mean,aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor
+scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,iterations_in_sample,base_perception_radius,query_radius,spatial_cell_size,max_selected_neighbors,target_neighbor_count,field_of_view_degrees,max_turn_rate,drag_coefficient,steering_noise_strength,perception_noise_strength,velocity_noise_strength,effective_radius_mean,selected_neighbors_mean,accepted_before_topology_mean,topology_truncated_mean,topology_truncation_rate,fov_rejected_mean,radius_rejected_mean,candidates_per_query,max_candidates_per_query,effective_neighbors_per_query,max_effective_neighbors_per_query,visited_cells_per_query,spatial_cell_count,avg_cell_occupancy,max_cell_occupancy,exact_separation_neighbors_mean,aggregate_visited_cells_per_query,aggregate_candidate_cells_per_query,aggregate_radius_rejected_cells_mean,aggregate_fov_rejected_cells_mean,total_spatial_visited_cells_per_query,total_spatial_candidates_per_query,aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,nearest_neighbor_distance,average_speed,altitude_variance,stall_count,near_ground_count,depth_variance,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 To compare all neighbor modes directly, including `cell_aggregate_social`, run:
@@ -180,7 +180,7 @@ Defaults:
 Columns:
 
 ```text
-scenario,boid_count,repetition,seed,dt,warmup_seconds,warmup_ticks,simulated_seconds,measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_per_tick,p95_ms_per_tick,max_ms_per_tick,ticks_per_second,real_time_factor,ticks_in_sample,simulated_ticks,wall_seconds,mean_ns_per_tick,updates_per_second
+scenario,boid_count,repetition,seed,dt,warmup_seconds,warmup_ticks,simulated_seconds,measured_ticks,total_wall_seconds,average_ms_per_tick,p50_ms_per_tick,p95_ms_per_tick,p99_ms_per_tick,max_ms_per_tick,ticks_per_second,real_time_factor,ticks_in_sample,simulated_ticks,wall_seconds,mean_ns_per_tick,updates_per_second
 ```
 
 Run the default accelerated benchmark through the helper script:
@@ -210,10 +210,10 @@ Measures spatial hash rebuild, spatial neighbor query, and naive neighbor counti
 Columns:
 
 ```text
-scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor
+scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,visited_cells_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,p99_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,p99_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,p99_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
-Use `candidates_per_query`, `effective_neighbors_per_query`, `occupied_cell_count`, `max_cell_occupancy`, and `average_cell_occupancy` to see whether late-run slowdown corresponds to clustering or worsening candidate density. `count_mismatches` should remain `0`; it compares spatial neighbor counts to naive counts for the same positions.
+Use `candidates_per_query`, `visited_cells_per_query`, `effective_neighbors_per_query`, `occupied_cell_count`, `max_cell_occupancy`, and `average_cell_occupancy` to see whether late-run slowdown corresponds to clustering, larger query footprints, or worsening candidate density. `count_mismatches` should remain `0`; it compares spatial neighbor counts to naive counts for the same positions.
 
 ### `flock3d_metrics_benchmark`
 
@@ -225,7 +225,7 @@ Measures ClassicBoids update cost with and without a metrics pointer:
 Columns:
 
 ```text
-scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor
+scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 The code currently exposes a null/non-null metrics pointer rather than separate basic/full metric levels, so this benchmark isolates the overhead of enabling the existing metrics path.
@@ -243,7 +243,7 @@ Measures `NoiseExperiment` update cost for deterministic noise combinations:
 Columns:
 
 ```text
-scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor
+scenario,noise_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,steering_noise_strength,perception_noise_strength,velocity_noise_strength,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor
 ```
 
 This benchmark helps decide whether deterministic noise generation should be optimized before model or spatial-hash changes.

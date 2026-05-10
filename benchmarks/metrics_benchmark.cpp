@@ -58,7 +58,7 @@ void run_scenario(std::string_view metric_mode, bool metrics_enabled, std::uint3
                   << elapsed << ',' << sample_index << ',' << stats.count << ',' << stats.mean_ms() << ','
                   << stats.min_or_zero() << ',' << stats.max_ms << ',' << elapsed << ',' << simulated_ticks << ','
                   << ticks_in_sample << ',' << stats.wall_seconds() << ',' << stats.mean_ns() << ','
-                  << stats.p50_ms() << ',' << stats.p95_ms() << ',' << stats.ticks_per_second() << ','
+                  << stats.p50_ms() << ',' << stats.p95_ms() << ',' << stats.p99_ms() << ',' << stats.ticks_per_second() << ','
                   << stats.ticks_per_second() << ',' << stats.real_time_factor() << '\n';
         ++sample_index;
     }
@@ -72,7 +72,7 @@ int main(int argc, char** argv)
     const BenchmarkOptions options = flock3d::bench::parse_options(argc, argv);
     ProgressBar progress{flock3d::bench::progress_enabled()};
 
-    std::cout << "scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
+    std::cout << "scenario,metric_mode,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,p99_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const std::uint32_t boid_count : flock3d::bench::benchmark_boid_counts()) {
         run_scenario("no_metrics", false, boid_count, options, progress);
         run_scenario("metrics_pointer", true, boid_count, options, progress);

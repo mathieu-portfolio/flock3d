@@ -81,19 +81,36 @@ void run_scenario(
         std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << neighbor_mode.name << ','
                   << (neighbor_mode.adaptive_perception_enabled ? "true" : "false") << ',' << boid_count << ','
                   << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
-                  << parameters.base_perception_radius << ',' << sample_metrics.effective_radius_mean << ','
-                  << sample_metrics.selected_neighbors_mean << ',' << sample_metrics.avg_candidates_per_query << ','
+                  << parameters.base_perception_radius << ',' << flock3d::sim::effective_query_radius(parameters) << ','
+                  << parameters.spatial_cell_size << ',' << parameters.max_selected_neighbors << ','
+                  << parameters.target_neighbor_count << ',' << parameters.field_of_view_degrees << ','
+                  << parameters.max_turn_rate << ',' << parameters.drag_coefficient << ','
+                  << parameters.steering_noise_strength << ',' << parameters.perception_noise_strength << ','
+                  << parameters.velocity_noise_strength << ',' << sample_metrics.effective_radius_mean << ','
+                  << sample_metrics.selected_neighbors_mean << ',' << sample_metrics.accepted_neighbors_before_topology_mean << ','
+                  << sample_metrics.topology_truncated_neighbors_mean << ',' << sample_metrics.topology_truncation_rate << ','
+                  << sample_metrics.fov_rejected_neighbors_mean << ',' << sample_metrics.radius_rejected_neighbors_mean << ','
+                  << sample_metrics.avg_candidates_per_query << ',' << sample_metrics.max_candidates_per_query << ','
                   << sample_metrics.avg_effective_neighbors_per_query << ','
-                  << sample_metrics.exact_separation_neighbors_mean << ','
-                  << sample_metrics.aggregate_cells_used_mean << ','
-                  << sample_metrics.social_weight_sum_mean << ','
+                  << sample_metrics.max_effective_neighbors_per_query << ',' << sample_metrics.visited_cells_per_query << ','
+                  << sample_metrics.spatial_cell_count << ',' << sample_metrics.avg_cell_occupancy << ','
+                  << sample_metrics.max_cell_occupancy << ',' << sample_metrics.exact_separation_neighbors_mean << ','
+                  << sample_metrics.aggregate_visited_cells_per_query << ','
+                  << sample_metrics.aggregate_candidate_cells_per_query << ','
+                  << sample_metrics.aggregate_radius_rejected_cells_mean << ','
+                  << sample_metrics.aggregate_fov_rejected_cells_mean << ','
+                  << sample_metrics.total_spatial_visited_cells_per_query << ','
+                  << sample_metrics.total_spatial_candidates_per_query << ','
+                  << sample_metrics.aggregate_cells_used_mean << ',' << sample_metrics.social_weight_sum_mean << ','
                   << sample_metrics.polarization << ',' << sample_metrics.cohesion << ','
                   << sample_metrics.nearest_neighbor_average_distance << ',' << sample_metrics.average_speed << ','
+                  << sample_metrics.altitude_variance << ',' << sample_metrics.stall_count << ','
+                  << sample_metrics.near_ground_count << ',' << sample_metrics.depth_variance << ','
                   << stats.mean_ms() << ','
                   << stats.min_or_zero() << ',' << stats.max_ms << ',' << elapsed << ',' << simulated_ticks << ','
                   << ticks_in_sample << ',' << stats.wall_seconds() << ',' << stats.mean_ns() << ','
-                  << stats.p50_ms() << ',' << stats.p95_ms() << ',' << stats.ticks_per_second() << ','
-                  << stats.ticks_per_second() << ',' << stats.real_time_factor() << '\n';
+                  << stats.p50_ms() << ',' << stats.p95_ms() << ',' << stats.p99_ms() << ','
+                  << stats.ticks_per_second() << ',' << stats.ticks_per_second() << ',' << stats.real_time_factor() << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -114,10 +131,21 @@ int main(int argc, char** argv)
     };
 
     std::cout << "scenario,model,neighbor_mode,adaptive_perception_enabled,boid_count,elapsed_seconds,sample_index,"
-                 "iterations_in_sample,base_perception_radius,effective_radius_mean,selected_neighbors_mean,"
-                 "candidates_per_query,effective_neighbors_per_query,exact_separation_neighbors_mean,"
+                 "iterations_in_sample,base_perception_radius,query_radius,spatial_cell_size,max_selected_neighbors,"
+                 "target_neighbor_count,field_of_view_degrees,max_turn_rate,drag_coefficient,steering_noise_strength,"
+                 "perception_noise_strength,velocity_noise_strength,effective_radius_mean,selected_neighbors_mean,"
+                 "accepted_before_topology_mean,topology_truncated_mean,topology_truncation_rate,"
+                 "fov_rejected_mean,radius_rejected_mean,candidates_per_query,max_candidates_per_query,"
+                 "effective_neighbors_per_query,max_effective_neighbors_per_query,visited_cells_per_query,"
+                 "spatial_cell_count,avg_cell_occupancy,max_cell_occupancy,exact_separation_neighbors_mean,"
+                 "aggregate_visited_cells_per_query,aggregate_candidate_cells_per_query,"
+                 "aggregate_radius_rejected_cells_mean,aggregate_fov_rejected_cells_mean,"
+                 "total_spatial_visited_cells_per_query,total_spatial_candidates_per_query,"
                  "aggregate_cells_used_mean,social_weight_sum_mean,polarization,flock_spread,"
-                 "nearest_neighbor_distance,average_speed,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
+                 "nearest_neighbor_distance,average_speed,altitude_variance,stall_count,near_ground_count,"
+                 "depth_variance,mean_update_ms,min_update_ms,max_update_ms,simulated_seconds,simulated_ticks,"
+                 "ticks_in_sample,sample_wall_seconds,mean_ns_per_tick,p50_update_ms,p95_update_ms,"
+                 "p99_update_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const auto model : {
              flock3d::sim::SimulationModel::ClassicBoids,
              flock3d::sim::SimulationModel::BirdFlight,

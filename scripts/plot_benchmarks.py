@@ -43,13 +43,37 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         filename="simulation_update.csv",
         group_columns=("scenario", "model", "neighbor_mode"),
         primary_metric="mean_ns_per_tick",
-        time_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "real_time_factor"),
-        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "selected_neighbors_mean"),
+        time_metrics=("mean_ns_per_tick", "p95_update_ms", "p99_update_ms", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=(
+            "mean_ns_per_tick",
+            "p95_update_ms",
+            "p99_update_ms",
+            "ticks_per_second",
+            "selected_neighbors_mean",
+            "max_candidates_per_query",
+        ),
         diagnostic_metrics=(
             "candidates_per_query",
+            "max_candidates_per_query",
             "effective_neighbors_per_query",
+            "max_effective_neighbors_per_query",
+            "visited_cells_per_query",
+            "total_spatial_visited_cells_per_query",
+            "total_spatial_candidates_per_query",
+            "spatial_cell_count",
+            "avg_cell_occupancy",
+            "max_cell_occupancy",
             "effective_radius_mean",
             "selected_neighbors_mean",
+            "accepted_before_topology_mean",
+            "topology_truncated_mean",
+            "topology_truncation_rate",
+            "fov_rejected_mean",
+            "radius_rejected_mean",
+            "aggregate_visited_cells_per_query",
+            "aggregate_candidate_cells_per_query",
+            "aggregate_cells_used_mean",
+            "social_weight_sum_mean",
         ),
     ),
     BenchmarkSpec(
@@ -57,10 +81,16 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         filename="spatial_hash.csv",
         group_columns=("scenario",),
         primary_metric="mean_spatial_query_ns_per_tick",
-        time_metrics=("mean_rebuild_ns_per_tick", "mean_spatial_query_ns_per_tick", "mean_naive_query_ns_per_tick"),
+        time_metrics=(
+            "mean_rebuild_ns_per_tick",
+            "mean_spatial_query_ns_per_tick",
+            "mean_naive_query_ns_per_tick",
+            "p99_spatial_query_ms",
+        ),
         scaling_metrics=("mean_rebuild_ns_per_tick", "mean_spatial_query_ns_per_tick", "mean_naive_query_ns_per_tick"),
         diagnostic_metrics=(
             "candidates_per_query",
+            "visited_cells_per_query",
             "effective_neighbors_per_query",
             "occupied_cell_count",
             "max_cell_occupancy",
@@ -71,24 +101,24 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         filename="metrics.csv",
         group_columns=("scenario", "metric_mode"),
         primary_metric="mean_ns_per_tick",
-        time_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "real_time_factor"),
-        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second"),
+        time_metrics=("mean_ns_per_tick", "p95_update_ms", "p99_update_ms", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "p99_update_ms", "ticks_per_second"),
     ),
     BenchmarkSpec(
         name="noise",
         filename="noise.csv",
         group_columns=("scenario", "noise_mode"),
         primary_metric="mean_ns_per_tick",
-        time_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second", "real_time_factor"),
-        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "ticks_per_second"),
+        time_metrics=("mean_ns_per_tick", "p95_update_ms", "p99_update_ms", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_update_ms", "p99_update_ms", "ticks_per_second"),
     ),
     BenchmarkSpec(
         name="simulation_ticks",
         filename="simulation_ticks.csv",
         group_columns=("scenario",),
         primary_metric="mean_ns_per_tick",
-        time_metrics=("mean_ns_per_tick", "p95_ms_per_tick", "ticks_per_second", "real_time_factor"),
-        scaling_metrics=("mean_ns_per_tick", "p95_ms_per_tick", "ticks_per_second", "real_time_factor"),
+        time_metrics=("mean_ns_per_tick", "p95_ms_per_tick", "p99_ms_per_tick", "ticks_per_second", "real_time_factor"),
+        scaling_metrics=("mean_ns_per_tick", "p95_ms_per_tick", "p99_ms_per_tick", "ticks_per_second", "real_time_factor"),
         sample_column="repetition",
         elapsed_column="simulated_seconds",
     ),
@@ -143,6 +173,23 @@ def require_columns(frame: pd.DataFrame, columns: Iterable[str], csv_path: Path)
         )
 
 
+def available_spec(spec: BenchmarkSpec, frame: pd.DataFrame) -> BenchmarkSpec:
+    def available(metrics: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(metric for metric in metrics if metric in frame.columns)
+
+    return BenchmarkSpec(
+        name=spec.name,
+        filename=spec.filename,
+        group_columns=spec.group_columns,
+        primary_metric=spec.primary_metric,
+        time_metrics=available(spec.time_metrics),
+        scaling_metrics=available(spec.scaling_metrics),
+        diagnostic_metrics=available(spec.diagnostic_metrics),
+        sample_column=spec.sample_column,
+        elapsed_column=spec.elapsed_column,
+    )
+
+
 def coerce_numeric(frame: pd.DataFrame, columns: Iterable[str], csv_path: Path) -> pd.DataFrame:
     converted = frame.copy()
     for column in columns:
@@ -173,7 +220,26 @@ def write_summary(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path) ->
         spec.elapsed_column,
         spec.primary_metric,
     ]
-    optional_columns = [column for column in ("simulated_seconds", "simulated_ticks", "ticks_in_sample", "iterations_in_sample", "sample_wall_seconds", "total_wall_seconds") if column in latest.columns]
+    optional_columns = [
+        column
+        for column in (
+            "simulated_seconds",
+            "simulated_ticks",
+            "ticks_in_sample",
+            "iterations_in_sample",
+            "sample_wall_seconds",
+            "total_wall_seconds",
+            "p95_update_ms",
+            "p99_update_ms",
+            "p95_ms_per_tick",
+            "p99_ms_per_tick",
+            "max_candidates_per_query",
+            "max_effective_neighbors_per_query",
+            "visited_cells_per_query",
+            "max_cell_occupancy",
+        )
+        if column in latest.columns
+    ]
     summary = latest[[*columns, *optional_columns]].copy()
     output_path = output_dir / f"{spec.name}_summary.csv"
     summary.to_csv(output_path, index=False)
@@ -182,6 +248,8 @@ def write_summary(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path) ->
 
 def plot_time_series(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path, file_format: str) -> list[Path]:
     paths: list[Path] = []
+    if not spec.time_metrics:
+        return paths
     for metric in spec.time_metrics:
         fig, ax = plt.subplots(figsize=(10, 5.5))
         for _, group in frame.groupby([*spec.group_columns, "boid_count"], dropna=False):
@@ -200,7 +268,9 @@ def plot_time_series(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path,
     return paths
 
 
-def plot_scaling(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path, file_format: str) -> Path:
+def plot_scaling(spec: BenchmarkSpec, frame: pd.DataFrame, output_dir: Path, file_format: str) -> Path | None:
+    if not spec.scaling_metrics:
+        return None
     latest = latest_samples(spec, frame)
     averaged = latest.groupby([*spec.group_columns, "boid_count"], as_index=False)[list(spec.scaling_metrics)].mean()
 
@@ -253,23 +323,24 @@ def process_benchmark(spec: BenchmarkSpec, input_dir: Path, output_dir: Path, fi
         return []
 
     frame = pd.read_csv(csv_path)
-    numeric_columns = {
-        "boid_count",
-        spec.elapsed_column,
-        spec.sample_column,
-        *spec.time_metrics,
-        *spec.scaling_metrics,
-        *spec.diagnostic_metrics,
+    require_columns(frame, [*spec.group_columns, "boid_count", spec.elapsed_column, spec.sample_column, spec.primary_metric], csv_path)
+    metric_columns = {
+        column
+        for column in (*spec.time_metrics, *spec.scaling_metrics, *spec.diagnostic_metrics, spec.primary_metric)
+        if column in frame.columns
     }
-    require_columns(frame, [*spec.group_columns, *numeric_columns], csv_path)
+    numeric_columns = {"boid_count", spec.elapsed_column, spec.sample_column, *metric_columns}
     frame = coerce_numeric(frame, numeric_columns, csv_path).dropna(subset=["boid_count", spec.elapsed_column, spec.sample_column])
     if frame.empty:
         raise ValueError(f"No plottable rows found in {csv_path}.")
 
-    written = [write_summary(spec, frame, output_dir)]
-    written.extend(plot_time_series(spec, frame, output_dir, file_format))
-    written.append(plot_scaling(spec, frame, output_dir, file_format))
-    written.extend(plot_diagnostics(spec, frame, output_dir, file_format))
+    plot_spec = available_spec(spec, frame)
+    written = [write_summary(plot_spec, frame, output_dir)]
+    written.extend(plot_time_series(plot_spec, frame, output_dir, file_format))
+    scaling_plot = plot_scaling(plot_spec, frame, output_dir, file_format)
+    if scaling_plot is not None:
+        written.append(scaling_plot)
+    written.extend(plot_diagnostics(plot_spec, frame, output_dir, file_format))
     return written
 
 
