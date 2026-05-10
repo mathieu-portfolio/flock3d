@@ -355,7 +355,9 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         }
 
         NeighborQueryDiagnostics aggregate_diagnostics{};
-        if (behavior.filter_neighbors_by_field_of_view) {
+        const bool aggregate_field_of_view_enabled = behavior.filter_neighbors_by_field_of_view
+            || parameters_.aggregate_social_field_of_view_enabled;
+        if (aggregate_field_of_view_enabled) {
             spatial_hash_.query_visible_cell_aggregates(
                 position,
                 social_query_radius,
@@ -409,7 +411,7 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 velocity,
                 offset,
                 social_radius,
-                behavior.filter_neighbors_by_field_of_view);
+                aggregate_field_of_view_enabled);
             if (visibility_weight <= 0.0F) {
                 ++aggregate_fov_rejected_count;
                 continue;

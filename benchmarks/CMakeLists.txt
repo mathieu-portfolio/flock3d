@@ -9,6 +9,7 @@ set(flock3d_benchmark_targets
     flock3d_simulation_update_benchmark
     flock3d_metrics_benchmark
     flock3d_noise_benchmark
+    flock3d_aggregate_social_benchmark
     flock3d_simulation_ticks_benchmark
 )
 
@@ -35,6 +36,12 @@ add_executable(flock3d_noise_benchmark
     benchmark_common.hpp
 )
 target_link_libraries(flock3d_noise_benchmark PRIVATE flock3d::core)
+
+add_executable(flock3d_aggregate_social_benchmark
+    aggregate_social_benchmark.cpp
+    benchmark_common.hpp
+)
+target_link_libraries(flock3d_aggregate_social_benchmark PRIVATE flock3d::core)
 
 add_executable(flock3d_simulation_ticks_benchmark
     simulation_ticks_benchmark.cpp
