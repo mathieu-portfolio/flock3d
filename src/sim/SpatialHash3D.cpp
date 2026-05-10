@@ -28,30 +28,19 @@ namespace {
     Vector3 position,
     CellCoord coord,
     float cell_size,
-    Vector3 forward,
-    float field_of_view_degrees) noexcept
+    Vector3 forward_direction,
+    float half_angle) noexcept
 {
-    if (field_of_view_degrees >= 359.999F) {
-        return true;
-    }
-    if (field_of_view_degrees <= 0.0F) {
-        return false;
-    }
-
-    const Vector3 forward_direction = math::normalize_safe(forward);
-    if (math::length_squared(forward_direction) <= 0.000001F) {
-        return true;
-    }
-
     const Vector3 offset = math::subtract(cell_center(coord, cell_size), position);
-    const float distance = math::length(offset);
+    const float distance_squared = math::length_squared(offset);
     constexpr float half_diagonal_scale = 0.8660254037844386F;
     const float cell_bounding_radius = cell_size * half_diagonal_scale;
-    if (distance <= cell_bounding_radius || distance <= 0.000001F) {
+    const float cell_bounding_radius_squared = cell_bounding_radius * cell_bounding_radius;
+    if (distance_squared <= cell_bounding_radius_squared || distance_squared <= 0.000001F) {
         return true;
     }
 
-    const float half_angle = field_of_view_degrees * (std::numbers::pi_v<float> / 180.0F) * 0.5F;
+    const float distance = std::sqrt(distance_squared);
     const float angular_margin = std::asin(std::clamp(cell_bounding_radius / distance, 0.0F, 1.0F));
     const float conservative_half_angle = std::min(std::numbers::pi_v<float>, half_angle + angular_margin);
     const float minimum_dot = std::cos(conservative_half_angle);
@@ -209,6 +198,15 @@ void SpatialHash3D::query_visible_cell_aggregates(
         return;
     }
 
+    if (field_of_view_degrees <= 0.0F) {
+        return;
+    }
+
+    const Vector3 forward_direction = math::normalize_safe(forward);
+    const bool cull_by_field_of_view = field_of_view_degrees < 359.999F
+        && math::length_squared(forward_direction) > 0.000001F;
+    const float half_angle = field_of_view_degrees * (std::numbers::pi_v<float> / 180.0F) * 0.5F;
+
     const auto center = cell_for(position);
     const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
     const float radius_squared = radius * radius;
@@ -217,8 +215,8 @@ void SpatialHash3D::query_visible_cell_aggregates(
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
             for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
                 const CellCoord coord{x, y, z};
-                if (!cell_may_intersect_field_of_view(
-                        position, coord, cell_size_, forward, field_of_view_degrees)) {
+                if (cull_by_field_of_view
+                    && !cell_may_intersect_field_of_view(position, coord, cell_size_, forward_direction, half_angle)) {
                     continue;
                 }
 

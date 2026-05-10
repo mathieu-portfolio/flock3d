@@ -166,7 +166,18 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
     const float perception_radius = base_perception_radius(parameters_);
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
     const bool noise_active = behavior.apply_noise && parameters_.noise_enabled;
+    const bool perception_noise_active = noise_active && parameters_.perception_noise_strength > 0.0F;
+    const bool steering_noise_active = noise_active && parameters_.steering_noise_strength > 0.0F;
+    const float perception_noise_distance_scale = parameters_.perception_noise_strength * perception_radius;
+    const float perception_noise_velocity_scale = parameters_.perception_noise_strength * parameters_.max_speed;
+    const float steering_noise_force_scale = parameters_.steering_noise_strength * parameters_.max_force;
     const std::uint64_t noise_step = noise_step_;
+    const bool field_of_view_active = behavior.filter_neighbors_by_field_of_view
+        && parameters_.field_of_view_degrees > 0.0F
+        && parameters_.field_of_view_degrees < 359.999F;
+    const bool field_of_view_blocks_all = behavior.filter_neighbors_by_field_of_view
+        && parameters_.field_of_view_degrees <= 0.0F;
+    const float minimum_field_of_view_dot = field_of_view_minimum_dot();
 
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 position = positions_[i];
@@ -177,10 +188,9 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             metrics->record_neighbor_query(query_diagnostics.candidates_tested, query_diagnostics.visited_cells);
         }
 
-        const auto local_candidate_count = static_cast<std::size_t>(std::count_if(
-            neighbor_indices_.begin(),
-            neighbor_indices_.end(),
-            [i](std::size_t neighbor_index) noexcept { return neighbor_index != i; }));
+        const std::size_t local_candidate_count = neighbor_indices_.empty() ? 0U : neighbor_indices_.size() - 1U;
+        const Vector3 normalized_velocity = math::normalize_safe(velocity);
+        const bool has_forward_direction = math::length_squared(normalized_velocity) > 0.000001F;
         const float effective_perception_radius = compute_effective_perception_radius(parameters_, local_candidate_count);
         const float effective_perception_radius_squared = effective_perception_radius * effective_perception_radius;
 
@@ -193,17 +203,23 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             }
 
             Vector3 offset = math::subtract(positions_[neighbor_index], position);
-            if (behavior.filter_neighbors_by_field_of_view && !neighbor_in_field_of_view(velocity, offset)) {
+            const float raw_distance_squared = math::length_squared(offset);
+            if (field_of_view_blocks_all) {
                 ++fov_rejected_count;
                 continue;
             }
-            if (noise_active && parameters_.perception_noise_strength > 0.0F) {
+            if (field_of_view_active && has_forward_direction && raw_distance_squared > 0.000001F) {
+                const float inverse_distance = 1.0F / std::sqrt(raw_distance_squared);
+                if (math::dot(normalized_velocity, math::scale(offset, inverse_distance)) < minimum_field_of_view_dot) {
+                    ++fov_rejected_count;
+                    continue;
+                }
+            }
+            if (perception_noise_active) {
                 const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 1U);
                 offset = math::add(
                     offset,
-                    math::scale(
-                        deterministic_noise_vector(i, channel, noise_step),
-                        parameters_.perception_noise_strength * perception_radius));
+                    math::scale(deterministic_noise_vector(i, channel, noise_step), perception_noise_distance_scale));
             }
             const float distance_squared = math::length_squared(offset);
             if (distance_squared <= 0.000001F || distance_squared > effective_perception_radius_squared) {
@@ -211,7 +227,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                 continue;
             }
 
-            selected_neighbors_.push_back(NeighborCandidate{neighbor_index, distance_squared});
+            selected_neighbors_.push_back(NeighborCandidate{neighbor_index, distance_squared, offset});
         }
         const std::size_t accepted_before_topology = selected_neighbors_.size();
         select_closest_neighbors(selected_neighbors_, parameters_.max_selected_neighbors);
@@ -226,15 +242,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
 
         for (const NeighborCandidate& neighbor : selected_neighbors_) {
             const std::size_t neighbor_index = neighbor.boid_index;
-            Vector3 offset = math::subtract(positions_[neighbor_index], position);
-            if (noise_active && parameters_.perception_noise_strength > 0.0F) {
-                const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 1U);
-                offset = math::add(
-                    offset,
-                    math::scale(
-                        deterministic_noise_vector(i, channel, noise_step),
-                        parameters_.perception_noise_strength * perception_radius));
-            }
+            const Vector3 offset = neighbor.offset;
             const float distance_squared = neighbor.distance_squared;
 
             if (!has_nearest_neighbor || distance_squared < nearest_neighbor_distance_squared) {
@@ -249,13 +257,11 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             }
 
             Vector3 perceived_velocity = velocities_[neighbor_index];
-            if (noise_active && parameters_.perception_noise_strength > 0.0F) {
+            if (perception_noise_active) {
                 const auto channel = static_cast<std::uint32_t>((neighbor_index * 2U) + 2U);
                 perceived_velocity = math::add(
                     perceived_velocity,
-                    math::scale(
-                        deterministic_noise_vector(i, channel, noise_step),
-                        parameters_.perception_noise_strength * parameters_.max_speed));
+                    math::scale(deterministic_noise_vector(i, channel, noise_step), perception_noise_velocity_scale));
             }
             alignment_sum = math::add(alignment_sum, perceived_velocity);
             cohesion_sum = math::add(cohesion_sum, math::add(position, offset));
@@ -299,12 +305,10 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         if (behavior.add_fish_medium_acceleration) {
             acceleration = math::add(acceleration, fish_medium_acceleration(position, velocity));
         }
-        if (noise_active && parameters_.steering_noise_strength > 0.0F) {
+        if (steering_noise_active) {
             acceleration = math::add(
                 acceleration,
-                math::scale(
-                    deterministic_noise_vector(i, 10'001U, noise_step),
-                    parameters_.steering_noise_strength * parameters_.max_force));
+                math::scale(deterministic_noise_vector(i, 10'001U, noise_step), steering_noise_force_scale));
         }
 
         accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
@@ -320,7 +324,12 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         : base_perception_radius(parameters_);
     const float separation_radius_squared = parameters_.separation_radius * parameters_.separation_radius;
     const bool noise_active = behavior.apply_noise && parameters_.noise_enabled;
+    const bool steering_noise_active = noise_active && parameters_.steering_noise_strength > 0.0F;
+    const float steering_noise_force_scale = parameters_.steering_noise_strength * parameters_.max_force;
     const std::uint64_t noise_step = noise_step_;
+    const bool aggregate_field_of_view_enabled = behavior.filter_neighbors_by_field_of_view
+        || parameters_.aggregate_social_field_of_view_enabled;
+    const float minimum_field_of_view_dot = field_of_view_minimum_dot();
 
     for (std::size_t i = 0; i < positions_.size(); ++i) {
         const Vector3 position = positions_[i];
@@ -355,8 +364,6 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         }
 
         NeighborQueryDiagnostics aggregate_diagnostics{};
-        const bool aggregate_field_of_view_enabled = behavior.filter_neighbors_by_field_of_view
-            || parameters_.aggregate_social_field_of_view_enabled;
         if (aggregate_field_of_view_enabled) {
             spatial_hash_.query_visible_cell_aggregates(
                 position,
@@ -390,6 +397,10 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         const float social_radius = compute_effective_perception_radius(parameters_, local_social_candidate_count);
         const float social_radius_squared = social_radius * social_radius;
 
+        const float inverse_social_radius = social_radius > 0.0F ? 1.0F / social_radius : 0.0F;
+        const Vector3 normalized_velocity = math::normalize_safe(velocity);
+        const bool has_forward_direction = math::length_squared(normalized_velocity) > 0.000001F;
+
         Vector3 weighted_velocity_sum{};
         Vector3 weighted_centroid_sum{};
         double social_weight_sum = 0.0;
@@ -408,9 +419,12 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 continue;
             }
             const float visibility_weight = social_perception_weight(
-                velocity,
+                normalized_velocity,
                 offset,
-                social_radius,
+                distance_squared,
+                inverse_social_radius,
+                minimum_field_of_view_dot,
+                has_forward_direction,
                 aggregate_field_of_view_enabled);
             if (visibility_weight <= 0.0F) {
                 ++aggregate_fov_rejected_count;
@@ -468,12 +482,10 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         if (behavior.add_fish_medium_acceleration) {
             acceleration = math::add(acceleration, fish_medium_acceleration(position, velocity));
         }
-        if (noise_active && parameters_.steering_noise_strength > 0.0F) {
+        if (steering_noise_active) {
             acceleration = math::add(
                 acceleration,
-                math::scale(
-                    deterministic_noise_vector(i, 10'001U, noise_step),
-                    parameters_.steering_noise_strength * parameters_.max_force));
+                math::scale(deterministic_noise_vector(i, 10'001U, noise_step), steering_noise_force_scale));
         }
 
         accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
@@ -542,49 +554,55 @@ bool BoidSimulation::neighbor_in_field_of_view(Vector3 velocity, Vector3 offset)
         return false;
     }
 
-    const Vector3 forward = math::normalize_safe(velocity);
-    const Vector3 direction = math::normalize_safe(offset);
-    if (math::length_squared(forward) <= 0.000001F || math::length_squared(direction) <= 0.000001F) {
+    const float velocity_squared = math::length_squared(velocity);
+    const float offset_squared = math::length_squared(offset);
+    if (velocity_squared <= 0.000001F || offset_squared <= 0.000001F) {
         return true;
     }
 
+    const float inverse_length_product = 1.0F / std::sqrt(velocity_squared * offset_squared);
+    return (math::dot(velocity, offset) * inverse_length_product) >= field_of_view_minimum_dot();
+}
+
+float BoidSimulation::field_of_view_minimum_dot() const noexcept
+{
     const float half_angle_radians = parameters_.field_of_view_degrees * (std::numbers::pi_v<float> / 180.0F) * 0.5F;
-    const float minimum_dot = std::cos(half_angle_radians);
-    return math::dot(forward, direction) >= minimum_dot;
+    return std::cos(half_angle_radians);
 }
 
 float BoidSimulation::social_perception_weight(
-    Vector3 velocity,
+    Vector3 normalized_velocity,
     Vector3 offset,
-    float social_radius,
+    float distance_squared,
+    float inverse_social_radius,
+    float minimum_field_of_view_dot,
+    bool has_forward_direction,
     bool use_front_weighting) const noexcept
 {
-    const float distance_squared = math::length_squared(offset);
-    if (distance_squared <= 0.000001F || social_radius <= 0.0F) {
+    if (distance_squared <= 0.000001F || inverse_social_radius <= 0.0F) {
         return 0.0F;
     }
 
     const float distance = std::sqrt(distance_squared);
-    if (distance >= social_radius) {
-        return 0.0F;
-    }
-
-    const float distance_weight = std::clamp(1.0F - (distance / social_radius), 0.0F, 1.0F);
+    const float distance_weight = std::clamp(1.0F - (distance * inverse_social_radius), 0.0F, 1.0F);
     if (!use_front_weighting) {
         return distance_weight;
     }
 
-    if (!neighbor_in_field_of_view(velocity, offset)) {
+    if (parameters_.field_of_view_degrees <= 0.0F) {
         return 0.0F;
     }
-
-    const Vector3 forward = math::normalize_safe(velocity);
-    const Vector3 direction = math::normalize_safe(offset);
-    if (math::length_squared(forward) <= 0.000001F || math::length_squared(direction) <= 0.000001F) {
+    if (parameters_.field_of_view_degrees >= 359.999F || !has_forward_direction) {
         return distance_weight;
     }
 
-    const float front_weight = std::clamp(0.5F + (0.5F * math::dot(forward, direction)), 0.0F, 1.0F);
+    const Vector3 direction = math::scale(offset, 1.0F / distance);
+    const float forward_dot = math::dot(normalized_velocity, direction);
+    if (forward_dot < minimum_field_of_view_dot) {
+        return 0.0F;
+    }
+
+    const float front_weight = std::clamp(0.5F + (0.5F * forward_dot), 0.0F, 1.0F);
     return distance_weight * front_weight;
 }
 
