@@ -105,3 +105,13 @@ TEST_CASE("Common benchmark update stats report latency and throughput metrics",
     CHECK(stats.ticks_per_second() == Catch::Approx(5.0 / 0.110));
     CHECK(stats.real_time_factor(0.5) == Catch::Approx(2.5 / 0.110));
 }
+
+
+TEST_CASE("Common benchmark thread count parser deduplicates requested workers", "[benchmark][common][threads]")
+{
+    const auto counts = flock3d::bench::parse_thread_counts("1,2,4,4");
+    REQUIRE(counts.size() == 3U);
+    CHECK(counts[0] == 1U);
+    CHECK(counts[1] == 2U);
+    CHECK(counts[2] == 4U);
+}

@@ -30,7 +30,7 @@ target_include_directories(flock3d_core
         ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(flock3d_core PUBLIC raylib)
+target_link_libraries(flock3d_core PUBLIC raylib Threads::Threads)
 flock3d_enable_warnings(flock3d_core)
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} PREFIX "Source" FILES ${flock3d_core_sources})

@@ -64,3 +64,13 @@ CSV export or live overlay
         ↓
 Python plotting scripts
 ```
+
+## CPU update threading
+
+`BoidSimulation` keeps the spatial hash build as a single pre-update phase, then treats the completed hash, boid positions, velocities, and cell aggregates as read-only while update workers evaluate per-boid steering. Each worker owns its temporary neighbor and aggregate buffers and writes only the acceleration, velocity, and position slot for the boid indices in its deterministic contiguous range. `thread_count = 1` keeps the serial path for reproducible debugging and low-overhead small runs; higher values split the same ordered index space across CPU worker threads without changing neighbor ordering or using shared random generators.
+
+Deterministic noise remains a pure function of boid index, channel, seed offset, and simulation step, so it is independent of worker scheduling. Metrics collection currently uses the serial update path because `SimulationMetrics` is an aggregate recorder; use `metrics = nullptr` for the fully threaded benchmark path.
+
+Choose a thread count by starting with `1`, `2`, and `4`, then compare against `std::thread::hardware_concurrency()` on the target machine. Small flocks or diagnostic runs can be faster with one worker because thread launch overhead may dominate. Larger CPU-only headless updates should benefit from more workers until memory bandwidth, spatial-query cost, or scheduling overhead becomes the bottleneck.
+
+GPU acceleration remains out of scope: the current architecture is intentionally CPU-first, keeps raylib rendering separate from simulation updates, and relies on deterministic CPU data structures and tests. Adding GPU compute would require a separate data layout, synchronization model, and validation strategy rather than a small update-phase parallelization.

@@ -4,6 +4,8 @@
 #include <cmath>
 #include <numbers>
 #include <random>
+#include <thread>
+#include <vector>
 
 #include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/NeighborSelection.hpp>
@@ -23,6 +25,55 @@ namespace {
     return math::normalize_safe(value);
 }
 
+[[nodiscard]] std::uint32_t automatic_thread_count() noexcept
+{
+    const unsigned int hardware_threads = std::thread::hardware_concurrency();
+    return hardware_threads == 0U ? 2U : std::max(1U, hardware_threads);
+}
+
+[[nodiscard]] std::uint32_t normalized_thread_count(std::uint32_t requested, std::size_t item_count) noexcept
+{
+    if (item_count <= 1U) {
+        return 1U;
+    }
+
+    const std::uint32_t available = requested == 0U ? automatic_thread_count() : requested;
+    return std::max(1U, std::min<std::uint32_t>(available, static_cast<std::uint32_t>(item_count)));
+}
+
+template <typename Fn>
+void parallel_for_ranges(std::size_t item_count, std::uint32_t requested_thread_count, Fn&& function)
+{
+    const std::uint32_t thread_count = normalized_thread_count(requested_thread_count, item_count);
+    if (thread_count <= 1U) {
+        function(0U, item_count);
+        return;
+    }
+
+    std::vector<std::thread> workers;
+    workers.reserve(thread_count - 1U);
+    const std::size_t base_chunk = item_count / thread_count;
+    const std::size_t remainder = item_count % thread_count;
+    std::size_t begin = 0U;
+
+    for (std::uint32_t worker = 0U; worker < thread_count; ++worker) {
+        const std::size_t chunk = base_chunk + (worker < remainder ? 1U : 0U);
+        const std::size_t end = begin + chunk;
+        if (worker + 1U == thread_count) {
+            function(begin, end);
+        } else {
+            workers.emplace_back([begin, end, &function]() {
+                function(begin, end);
+            });
+        }
+        begin = end;
+    }
+
+    for (std::thread& worker : workers) {
+        worker.join();
+    }
+}
+
 } // namespace
 
 BoidSimulation::BoidSimulation(SimulationParameters parameters)
@@ -31,6 +82,11 @@ BoidSimulation::BoidSimulation(SimulationParameters parameters)
 {
     sync_spatial_cell_size_to_query_radius(parameters_);
     reset(parameters_.boid_count);
+}
+
+std::uint32_t BoidSimulation::effective_thread_count() const noexcept
+{
+    return normalized_thread_count(parameters_.thread_count, positions_.size());
 }
 
 void BoidSimulation::reset()
@@ -179,25 +235,34 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         && parameters_.field_of_view_degrees <= 0.0F;
     const float minimum_field_of_view_dot = field_of_view_minimum_dot();
 
-    for (std::size_t i = 0; i < positions_.size(); ++i) {
-        const Vector3 position = positions_[i];
-        const Vector3 velocity = velocities_[i];
-        NeighborQueryDiagnostics query_diagnostics{};
-        spatial_hash_.query_neighbors(position, query_radius, neighbor_indices_, query_diagnostics);
-        if (metrics != nullptr) {
-            metrics->record_neighbor_query(query_diagnostics.candidates_tested, query_diagnostics.visited_cells);
-        }
+    const std::uint32_t thread_count = metrics == nullptr ? parameters_.thread_count : 1U;
+    const bool use_local_workspace = normalized_thread_count(thread_count, positions_.size()) > 1U;
+    parallel_for_ranges(positions_.size(), thread_count, [&](std::size_t begin, std::size_t end) {
+        std::vector<std::size_t> neighbor_indices;
+        std::vector<NeighborCandidate> selected_neighbors;
+        neighbor_indices.reserve(positions_.size());
+        selected_neighbors.reserve(positions_.size());
+        for (std::size_t i = begin; i < end; ++i) {
+            const Vector3 position = positions_[i];
+            const Vector3 velocity = velocities_[i];
+            NeighborQueryDiagnostics query_diagnostics{};
+            std::vector<std::size_t>& query_result = use_local_workspace ? neighbor_indices : neighbor_indices_;
+            spatial_hash_.query_neighbors(position, query_radius, query_result, query_diagnostics);
+            if (metrics != nullptr) {
+                metrics->record_neighbor_query(query_diagnostics.candidates_tested, query_diagnostics.visited_cells);
+            }
 
-        const std::size_t local_candidate_count = neighbor_indices_.empty() ? 0U : neighbor_indices_.size() - 1U;
-        const Vector3 normalized_velocity = math::normalize_safe(velocity);
-        const bool has_forward_direction = math::length_squared(normalized_velocity) > 0.000001F;
-        const float effective_perception_radius = compute_effective_perception_radius(parameters_, local_candidate_count);
-        const float effective_perception_radius_squared = effective_perception_radius * effective_perception_radius;
+            const std::size_t local_candidate_count = query_result.empty() ? 0U : query_result.size() - 1U;
+            const Vector3 normalized_velocity = math::normalize_safe(velocity);
+            const bool has_forward_direction = math::length_squared(normalized_velocity) > 0.000001F;
+            const float effective_perception_radius = compute_effective_perception_radius(parameters_, local_candidate_count);
+            const float effective_perception_radius_squared = effective_perception_radius * effective_perception_radius;
 
-        selected_neighbors_.clear();
-        std::size_t fov_rejected_count = 0;
-        std::size_t radius_rejected_count = 0;
-        for (const std::size_t neighbor_index : neighbor_indices_) {
+            std::vector<NeighborCandidate>& selected = use_local_workspace ? selected_neighbors : selected_neighbors_;
+            selected.clear();
+            std::size_t fov_rejected_count = 0;
+            std::size_t radius_rejected_count = 0;
+            for (const std::size_t neighbor_index : query_result) {
             if (neighbor_index == i) {
                 continue;
             }
@@ -227,10 +292,10 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                 continue;
             }
 
-            selected_neighbors_.push_back(NeighborCandidate{neighbor_index, distance_squared, offset});
-        }
-        const std::size_t accepted_before_topology = selected_neighbors_.size();
-        select_closest_neighbors(selected_neighbors_, parameters_.max_selected_neighbors);
+            selected.push_back(NeighborCandidate{neighbor_index, distance_squared, offset});
+            }
+            const std::size_t accepted_before_topology = selected.size();
+            select_closest_neighbors(selected, parameters_.max_selected_neighbors);
 
         Vector3 separation_sum{};
         Vector3 alignment_sum{};
@@ -240,7 +305,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
         float nearest_neighbor_distance_squared = 0.0F;
         bool has_nearest_neighbor = false;
 
-        for (const NeighborCandidate& neighbor : selected_neighbors_) {
+            for (const NeighborCandidate& neighbor : selected) {
             const std::size_t neighbor_index = neighbor.boid_index;
             const Vector3 offset = neighbor.offset;
             const float distance_squared = neighbor.distance_squared;
@@ -281,7 +346,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             metrics->record_effective_neighbors(flock_count);
             metrics->record_neighbor_filtering(
                 accepted_before_topology,
-                selected_neighbors_.size(),
+                selected.size(),
                 fov_rejected_count,
                 radius_rejected_count);
             if (has_nearest_neighbor) {
@@ -311,8 +376,9 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
                 math::scale(deterministic_noise_vector(i, 10'001U, noise_step), steering_noise_force_scale));
         }
 
-        accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
-    }
+            accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
+        }
+    });
 
     integrate(dt, behavior, noise_active, noise_step);
 }
@@ -331,12 +397,20 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         || parameters_.aggregate_social_field_of_view_enabled;
     const float minimum_field_of_view_dot = field_of_view_minimum_dot();
 
-    for (std::size_t i = 0; i < positions_.size(); ++i) {
-        const Vector3 position = positions_[i];
-        const Vector3 velocity = velocities_[i];
+    const std::uint32_t thread_count = metrics == nullptr ? parameters_.thread_count : 1U;
+    const bool use_local_workspace = normalized_thread_count(thread_count, positions_.size()) > 1U;
+    parallel_for_ranges(positions_.size(), thread_count, [&](std::size_t begin, std::size_t end) {
+        std::vector<std::size_t> neighbor_indices;
+        std::vector<CellAggregate> aggregate_cells;
+        neighbor_indices.reserve(positions_.size());
+        aggregate_cells.reserve(positions_.size());
+        for (std::size_t i = begin; i < end; ++i) {
+            const Vector3 position = positions_[i];
+            const Vector3 velocity = velocities_[i];
 
-        NeighborQueryDiagnostics separation_diagnostics{};
-        spatial_hash_.query_neighbors(position, parameters_.separation_radius, neighbor_indices_, separation_diagnostics);
+            NeighborQueryDiagnostics separation_diagnostics{};
+            std::vector<std::size_t>& separation_neighbors = use_local_workspace ? neighbor_indices : neighbor_indices_;
+            spatial_hash_.query_neighbors(position, parameters_.separation_radius, separation_neighbors, separation_diagnostics);
         if (metrics != nullptr) {
             metrics->record_neighbor_query(separation_diagnostics.candidates_tested, separation_diagnostics.visited_cells);
         }
@@ -345,7 +419,7 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         std::size_t separation_count = 0;
         float nearest_neighbor_distance_squared = 0.0F;
         bool has_nearest_neighbor = false;
-        for (const std::size_t neighbor_index : neighbor_indices_) {
+            for (const std::size_t neighbor_index : separation_neighbors) {
             if (neighbor_index == i) {
                 continue;
             }
@@ -370,15 +444,17 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 social_query_radius,
                 velocity,
                 parameters_.field_of_view_degrees,
-                aggregate_cells_,
+                use_local_workspace ? aggregate_cells : aggregate_cells_,
                 aggregate_diagnostics);
         } else {
-            spatial_hash_.query_cell_aggregates(position, social_query_radius, aggregate_cells_, aggregate_diagnostics);
+            spatial_hash_.query_cell_aggregates(
+                position, social_query_radius, use_local_workspace ? aggregate_cells : aggregate_cells_, aggregate_diagnostics);
         }
 
         std::size_t local_social_candidate_count = 0;
         const CellCoord own_cell = spatial_hash_.cell_for(position);
-        for (CellAggregate& aggregate : aggregate_cells_) {
+            std::vector<CellAggregate>& social_aggregates = use_local_workspace ? aggregate_cells : aggregate_cells_;
+            for (CellAggregate& aggregate : social_aggregates) {
             if (aggregate.coord == own_cell) {
                 if (aggregate.count <= 1U) {
                     aggregate.count = 0U;
@@ -407,7 +483,7 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
         std::size_t aggregate_cells_used = 0;
         std::size_t aggregate_radius_rejected_count = 0;
         std::size_t aggregate_fov_rejected_count = 0;
-        for (const CellAggregate& aggregate : aggregate_cells_) {
+            for (const CellAggregate& aggregate : social_aggregates) {
             if (aggregate.count == 0U) {
                 continue;
             }
@@ -488,16 +564,18 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 math::scale(deterministic_noise_vector(i, 10'001U, noise_step), steering_noise_force_scale));
         }
 
-        accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
-    }
+            accelerations_[i] = math::clamp_length(acceleration, parameters_.max_force);
+        }
+    });
 
     integrate(dt, behavior, noise_active, noise_step);
 }
 
 void BoidSimulation::integrate(float dt, ModelBehavior behavior, bool noise_active, std::uint64_t noise_step)
 {
-    for (std::size_t i = 0; i < positions_.size(); ++i) {
-        const Vector3 previous_velocity = velocities_[i];
+    parallel_for_ranges(positions_.size(), parameters_.thread_count, [&](std::size_t begin, std::size_t end) {
+        for (std::size_t i = begin; i < end; ++i) {
+            const Vector3 previous_velocity = velocities_[i];
         Vector3 desired_velocity = math::add(previous_velocity, math::scale(accelerations_[i], dt));
         if (behavior.apply_bird_velocity_constraints || behavior.apply_fish_velocity_constraints) {
             desired_velocity = limit_turn_rate(previous_velocity, desired_velocity, dt);
@@ -524,8 +602,9 @@ void BoidSimulation::integrate(float dt, ModelBehavior behavior, bool noise_acti
         }
         velocities_[i] = desired_velocity;
         positions_[i] = math::add(positions_[i], math::scale(velocities_[i], dt));
-        wrap_position(positions_[i]);
-    }
+            wrap_position(positions_[i]);
+        }
+    });
 
     if (behavior.apply_noise) {
         ++noise_step_;

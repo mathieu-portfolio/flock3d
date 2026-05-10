@@ -25,6 +25,7 @@ endforeach()
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(Flock3DWarnings)
 include(Flock3DDependencies)
+find_package(Threads REQUIRED)
 
 flock3d_fetch_dependencies()
 
