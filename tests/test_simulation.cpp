@@ -230,6 +230,76 @@ TEST_CASE("Fixed-radius uncapped neighbor mode remains available", "[simulation]
     CHECK(metrics.effective_radius_mean == Catch::Approx(10.0F));
 }
 
+
+TEST_CASE("Cell aggregate social uses visibility-weighted social perception", "[simulation][neighbors][aggregates]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.model = flock3d::sim::SimulationModel::BirdFlight;
+    parameters.neighbor_mode = flock3d::sim::NeighborMode::CellAggregateSocial;
+    parameters.field_of_view_degrees = 180.0F;
+    parameters.cohesion_weight = 1.0F;
+    parameters.max_force = 10.0F;
+    parameters.separation_radius = 0.5F;
+    flock3d::sim::sync_spatial_cell_size_to_query_radius(parameters);
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 10.0F, 0.0F}, Vector3{2.0F, 0.0F, 0.0F});
+    simulation.add_boid(Vector3{-4.0F, 10.0F, 0.0F}, Vector3{2.0F, 0.0F, 0.0F});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(1.0F, &metrics);
+
+    CHECK(simulation.velocities()[0].x == Catch::Approx(2.0F));
+    CHECK(metrics.exact_separation_neighbors_total == 0U);
+}
+
+TEST_CASE("Cell aggregate social applies distance falloff to aggregate weights", "[simulation][neighbors][aggregates]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.neighbor_mode = flock3d::sim::NeighborMode::CellAggregateSocial;
+    parameters.neighbor_radius = 10.0F;
+    parameters.base_perception_radius = 10.0F;
+    parameters.separation_radius = 0.5F;
+    flock3d::sim::sync_spatial_cell_size_to_query_radius(parameters);
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{5.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.social_weight_sum_mean > 0.0);
+    CHECK(metrics.social_weight_sum_mean < 1.0);
+    CHECK(metrics.exact_separation_neighbors_total == 0U);
+}
+
+TEST_CASE("Cell aggregate social can adapt social radius from local density", "[simulation][neighbors][aggregates]")
+{
+    auto parameters = steering_test_parameters();
+    parameters.neighbor_mode = flock3d::sim::NeighborMode::CellAggregateSocial;
+    parameters.base_perception_radius = 10.0F;
+    parameters.min_perception_radius = 2.0F;
+    parameters.max_perception_radius = 20.0F;
+    parameters.target_neighbor_count = 1U;
+    parameters.adaptive_perception_enabled = true;
+    parameters.separation_radius = 0.5F;
+    flock3d::sim::sync_spatial_cell_size_to_query_radius(parameters);
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.add_boid(Vector3{-2.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{-1.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{0.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{1.0F, 0.0F, 0.0F}, Vector3{});
+    simulation.add_boid(Vector3{2.0F, 0.0F, 0.0F}, Vector3{});
+
+    flock3d::sim::SimulationMetrics metrics{};
+    simulation.update(0.0F, &metrics);
+
+    CHECK(metrics.effective_radius_mean < 10.0);
+    CHECK(metrics.effective_radius_mean >= 2.0);
+}
+
 TEST_CASE("BoidSimulation records neighbor metrics", "[simulation]")
 {
     auto parameters = steering_test_parameters();

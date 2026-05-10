@@ -50,6 +50,13 @@ public:
         float radius,
         std::vector<CellAggregate>& result,
         NeighborQueryDiagnostics& diagnostics) const;
+    void query_visible_cell_aggregates(
+        Vector3 position,
+        float radius,
+        Vector3 forward,
+        float field_of_view_degrees,
+        std::vector<CellAggregate>& result,
+        NeighborQueryDiagnostics& diagnostics) const;
     [[nodiscard]] const CellAggregate* aggregate_for(CellCoord coord) const noexcept;
     void query_neighbors(Vector3 position, float radius, std::vector<std::size_t>& result) const;
     void query_neighbors(
