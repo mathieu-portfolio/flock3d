@@ -220,27 +220,47 @@ std::uint32_t BoidSimulation::effective_thread_count() const noexcept
 void BoidSimulation::prepare_parallel_workspaces(std::uint32_t worker_count)
 {
     worker_count = std::max(1U, worker_count);
-    if (worker_scratch_.size() < worker_count) {
-        worker_scratch_.resize(worker_count);
+    const std::size_t requested_worker_count = static_cast<std::size_t>(worker_count);
+    const std::size_t previous_worker_count = worker_scratch_.size();
+    if (previous_worker_count < requested_worker_count) {
+        worker_scratch_.resize(requested_worker_count);
     }
-    for (WorkerScratch& scratch : worker_scratch_) {
-        if (scratch.neighbor_indices.capacity() < positions_.size()) {
-            scratch.neighbor_indices.reserve(positions_.size());
+
+    const std::size_t required_capacity = positions_.size();
+    if (worker_scratch_capacity_ >= required_capacity && previous_worker_count >= requested_worker_count) {
+        return;
+    }
+
+    for (std::size_t worker_index = 0; worker_index < requested_worker_count; ++worker_index) {
+        WorkerScratch& scratch = worker_scratch_[worker_index];
+        if (scratch.neighbor_indices.capacity() < required_capacity) {
+            scratch.neighbor_indices.reserve(required_capacity);
         }
-        if (scratch.selected_neighbors.capacity() < positions_.size()) {
-            scratch.selected_neighbors.reserve(positions_.size());
+        if (scratch.selected_neighbors.capacity() < required_capacity) {
+            scratch.selected_neighbors.reserve(required_capacity);
         }
-        if (scratch.aggregate_cells.capacity() < positions_.size()) {
-            scratch.aggregate_cells.reserve(positions_.size());
+        if (scratch.aggregate_cells.capacity() < required_capacity) {
+            scratch.aggregate_cells.reserve(required_capacity);
         }
     }
+    worker_scratch_capacity_ = std::max(worker_scratch_capacity_, required_capacity);
 }
 
 template <typename Fn>
 void BoidSimulation::parallel_for_ranges(std::size_t item_count, std::uint32_t requested_thread_count, Fn&& function)
 {
     const std::uint32_t worker_count = normalized_thread_count(requested_thread_count, item_count);
+    if (active_timing_diagnostics_ != nullptr) {
+        ++active_timing_diagnostics_->parallel_for_calls;
+        active_timing_diagnostics_->parallel_worker_count_total += worker_count;
+    }
+
+    const auto workspace_begin = TimingClock::now();
     prepare_parallel_workspaces(worker_count);
+    if (active_timing_diagnostics_ != nullptr) {
+        active_timing_diagnostics_->parallel_workspace_ms += elapsed_milliseconds(workspace_begin, TimingClock::now());
+    }
+
     if (worker_count <= 1U) {
         function(0U, 0U, item_count);
         return;
@@ -249,6 +269,8 @@ void BoidSimulation::parallel_for_ranges(std::size_t item_count, std::uint32_t r
     if (parallel_executor_ == nullptr) {
         parallel_executor_ = std::make_unique<ParallelExecutor>();
     }
+
+    const auto dispatch_begin = TimingClock::now();
     parallel_executor_->parallel_for(
         item_count,
         worker_count,
@@ -256,6 +278,9 @@ void BoidSimulation::parallel_for_ranges(std::size_t item_count, std::uint32_t r
         [fn = std::forward<Fn>(function)](std::uint32_t worker_index, std::size_t begin, std::size_t end) mutable {
             fn(worker_index, begin, end);
         });
+    if (active_timing_diagnostics_ != nullptr) {
+        active_timing_diagnostics_->parallel_dispatch_ms += elapsed_milliseconds(dispatch_begin, TimingClock::now());
+    }
 }
 
 void BoidSimulation::reset()
@@ -271,6 +296,8 @@ void BoidSimulation::reset(std::uint32_t boid_count)
     neighbor_indices_.clear();
     selected_neighbors_.clear();
     aggregate_cells_.clear();
+    worker_scratch_.clear();
+    worker_scratch_capacity_ = 0U;
     noise_step_ = 0;
     positions_.reserve(boid_count);
     velocities_.reserve(boid_count);

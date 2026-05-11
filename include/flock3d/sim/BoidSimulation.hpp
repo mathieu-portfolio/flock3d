@@ -20,6 +20,10 @@ struct SimulationTimingDiagnostics {
     double model_update_ms{};
     double integration_ms{};
     double metrics_ms{};
+    double parallel_workspace_ms{};
+    double parallel_dispatch_ms{};
+    std::size_t parallel_for_calls{};
+    std::size_t parallel_worker_count_total{};
 };
 
 class BoidSimulation {
@@ -104,6 +108,7 @@ private:
     std::vector<CellAggregate> aggregate_cells_;
     std::vector<WorkerScratch> worker_scratch_;
     std::unique_ptr<ParallelExecutor> parallel_executor_;
+    std::size_t worker_scratch_capacity_{};
     std::uint64_t noise_step_{};
     SimulationTimingDiagnostics* active_timing_diagnostics_{};
 };
