@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include <raylib.h>
@@ -16,6 +17,7 @@ namespace flock3d::sim {
 class BoidSimulation {
 public:
     explicit BoidSimulation(SimulationParameters parameters = {});
+    ~BoidSimulation();
 
     void reset();
     void reset(std::uint32_t boid_count);
@@ -32,6 +34,14 @@ public:
     [[nodiscard]] std::uint32_t effective_thread_count() const noexcept;
 
 private:
+    struct WorkerScratch {
+        std::vector<std::size_t> neighbor_indices{};
+        std::vector<NeighborCandidate> selected_neighbors{};
+        std::vector<CellAggregate> aggregate_cells{};
+    };
+
+    class ParallelExecutor;
+
     struct ModelBehavior {
         bool filter_neighbors_by_field_of_view{false};
         bool add_bird_altitude_acceleration{false};
@@ -70,6 +80,10 @@ private:
     [[nodiscard]] Vector3 deterministic_noise_vector(std::size_t boid_index, std::uint32_t channel, std::uint64_t step) const;
     [[nodiscard]] float combined_noise_strength() const noexcept;
     void record_collective_metrics(SimulationMetrics& metrics) const noexcept;
+    void prepare_parallel_workspaces(std::uint32_t worker_count);
+
+    template <typename Fn>
+    void parallel_for_ranges(std::size_t item_count, std::uint32_t requested_thread_count, Fn&& function);
 
     SimulationParameters parameters_;
     SpatialHash3D spatial_hash_;
@@ -79,6 +93,8 @@ private:
     std::vector<std::size_t> neighbor_indices_;
     std::vector<NeighborCandidate> selected_neighbors_;
     std::vector<CellAggregate> aggregate_cells_;
+    std::vector<WorkerScratch> worker_scratch_;
+    std::unique_ptr<ParallelExecutor> parallel_executor_;
     std::uint64_t noise_step_{};
 };
 

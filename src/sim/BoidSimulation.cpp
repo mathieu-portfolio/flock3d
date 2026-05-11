@@ -1,10 +1,15 @@
 #include <flock3d/sim/BoidSimulation.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
 #include <numbers>
 #include <random>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <flock3d/math/Vec3.hpp>
@@ -25,56 +30,164 @@ namespace {
     return math::normalize_safe(value);
 }
 
-[[nodiscard]] std::uint32_t automatic_thread_count() noexcept
-{
-    const unsigned int hardware_threads = std::thread::hardware_concurrency();
-    return hardware_threads == 0U ? 2U : std::max(1U, hardware_threads);
-}
-
 [[nodiscard]] std::uint32_t normalized_thread_count(std::uint32_t requested, std::size_t item_count) noexcept
 {
     if (item_count <= 1U) {
         return 1U;
     }
 
-    const std::uint32_t available = requested == 0U ? automatic_thread_count() : requested;
+    const std::uint32_t available = requested == 0U
+        ? automatic_thread_count_for_boids(item_count)
+        : requested;
     return std::max(1U, std::min<std::uint32_t>(available, static_cast<std::uint32_t>(item_count)));
 }
 
-template <typename Fn>
-void parallel_for_ranges(std::size_t item_count, std::uint32_t requested_thread_count, Fn&& function)
+[[nodiscard]] std::size_t chunk_size_for(
+    std::size_t item_count,
+    std::uint32_t worker_count,
+    std::uint32_t requested_chunk_size) noexcept
 {
-    const std::uint32_t thread_count = normalized_thread_count(requested_thread_count, item_count);
-    if (thread_count <= 1U) {
-        function(0U, item_count);
-        return;
+    if (worker_count <= 1U || item_count <= 1U) {
+        return item_count;
     }
-
-    std::vector<std::thread> workers;
-    workers.reserve(thread_count - 1U);
-    const std::size_t base_chunk = item_count / thread_count;
-    const std::size_t remainder = item_count % thread_count;
-    std::size_t begin = 0U;
-
-    for (std::uint32_t worker = 0U; worker < thread_count; ++worker) {
-        const std::size_t chunk = base_chunk + (worker < remainder ? 1U : 0U);
-        const std::size_t end = begin + chunk;
-        if (worker + 1U == thread_count) {
-            function(begin, end);
-        } else {
-            workers.emplace_back([begin, end, &function]() {
-                function(begin, end);
-            });
-        }
-        begin = end;
+    if (requested_chunk_size > 0U) {
+        return std::max<std::size_t>(1U, requested_chunk_size);
     }
-
-    for (std::thread& worker : workers) {
-        worker.join();
-    }
+    return (item_count + static_cast<std::size_t>(worker_count) - 1U) / static_cast<std::size_t>(worker_count);
 }
 
 } // namespace
+
+class BoidSimulation::ParallelExecutor {
+public:
+    using Task = std::function<void(std::uint32_t, std::size_t, std::size_t)>;
+
+    ~ParallelExecutor()
+    {
+        stop();
+    }
+
+    void parallel_for(std::size_t item_count, std::uint32_t worker_count, std::size_t chunk_size, Task task)
+    {
+        if (item_count == 0U) {
+            return;
+        }
+        if (worker_count <= 1U) {
+            task(0U, 0U, item_count);
+            return;
+        }
+
+        resize(worker_count);
+        chunk_size = std::max<std::size_t>(1U, chunk_size);
+        const std::size_t chunk_count = (item_count + chunk_size - 1U) / chunk_size;
+        {
+            std::lock_guard lock{mutex_};
+            task_ = std::move(task);
+            item_count_ = item_count;
+            chunk_size_ = chunk_size;
+            chunk_count_ = chunk_count;
+            next_chunk_.store(0U, std::memory_order_relaxed);
+            active_workers_ = workers_.size() + 1U;
+            ++generation_;
+        }
+        work_available_.notify_all();
+        run_chunks(0U);
+
+        std::unique_lock lock{mutex_};
+        finished_.wait(lock, [this]() { return active_workers_ == 0U; });
+        task_ = Task{};
+    }
+
+private:
+    void resize(std::uint32_t worker_count)
+    {
+        const std::size_t background_worker_count = worker_count > 0U ? static_cast<std::size_t>(worker_count - 1U) : 0U;
+        if (workers_.size() == background_worker_count) {
+            return;
+        }
+        stop();
+        workers_.reserve(background_worker_count);
+        for (std::size_t index = 0; index < background_worker_count; ++index) {
+            workers_.emplace_back([this, worker_index = static_cast<std::uint32_t>(index + 1U)]() {
+                worker_loop(worker_index);
+            });
+        }
+    }
+
+    void stop()
+    {
+        {
+            std::lock_guard lock{mutex_};
+            stop_requested_ = true;
+            ++generation_;
+        }
+        work_available_.notify_all();
+        for (std::thread& worker : workers_) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
+        workers_.clear();
+        stop_requested_ = false;
+    }
+
+    void worker_loop(std::uint32_t worker_index)
+    {
+        std::size_t observed_generation{};
+        {
+            std::lock_guard lock{mutex_};
+            observed_generation = generation_;
+        }
+        while (true) {
+            {
+                std::unique_lock lock{mutex_};
+                work_available_.wait(lock, [this, observed_generation]() {
+                    return stop_requested_ || generation_ != observed_generation;
+                });
+                if (stop_requested_) {
+                    return;
+                }
+                observed_generation = generation_;
+            }
+            run_chunks(worker_index);
+        }
+    }
+
+    void run_chunks(std::uint32_t worker_index)
+    {
+        while (true) {
+            const std::size_t chunk = next_chunk_.fetch_add(1U, std::memory_order_relaxed);
+            if (chunk >= chunk_count_) {
+                break;
+            }
+            const std::size_t begin = chunk * chunk_size_;
+            const std::size_t end = std::min(item_count_, begin + chunk_size_);
+            task_(worker_index, begin, end);
+        }
+
+        std::lock_guard lock{mutex_};
+        if (active_workers_ > 0U) {
+            --active_workers_;
+            if (active_workers_ == 0U) {
+                finished_.notify_one();
+            }
+        }
+    }
+
+    std::mutex mutex_{};
+    std::condition_variable work_available_{};
+    std::condition_variable finished_{};
+    std::vector<std::thread> workers_{};
+    Task task_{};
+    std::atomic<std::size_t> next_chunk_{0U};
+    std::size_t item_count_{};
+    std::size_t chunk_size_{1U};
+    std::size_t chunk_count_{};
+    std::size_t generation_{};
+    std::size_t active_workers_{};
+    bool stop_requested_{};
+};
+
 
 BoidSimulation::BoidSimulation(SimulationParameters parameters)
     : parameters_{parameters}
@@ -84,9 +197,53 @@ BoidSimulation::BoidSimulation(SimulationParameters parameters)
     reset(parameters_.boid_count);
 }
 
+BoidSimulation::~BoidSimulation() = default;
+
 std::uint32_t BoidSimulation::effective_thread_count() const noexcept
 {
     return normalized_thread_count(parameters_.thread_count, positions_.size());
+}
+
+
+void BoidSimulation::prepare_parallel_workspaces(std::uint32_t worker_count)
+{
+    worker_count = std::max(1U, worker_count);
+    if (worker_scratch_.size() < worker_count) {
+        worker_scratch_.resize(worker_count);
+    }
+    for (WorkerScratch& scratch : worker_scratch_) {
+        if (scratch.neighbor_indices.capacity() < positions_.size()) {
+            scratch.neighbor_indices.reserve(positions_.size());
+        }
+        if (scratch.selected_neighbors.capacity() < positions_.size()) {
+            scratch.selected_neighbors.reserve(positions_.size());
+        }
+        if (scratch.aggregate_cells.capacity() < positions_.size()) {
+            scratch.aggregate_cells.reserve(positions_.size());
+        }
+    }
+}
+
+template <typename Fn>
+void BoidSimulation::parallel_for_ranges(std::size_t item_count, std::uint32_t requested_thread_count, Fn&& function)
+{
+    const std::uint32_t worker_count = normalized_thread_count(requested_thread_count, item_count);
+    prepare_parallel_workspaces(worker_count);
+    if (worker_count <= 1U) {
+        function(0U, 0U, item_count);
+        return;
+    }
+
+    if (parallel_executor_ == nullptr) {
+        parallel_executor_ = std::make_unique<ParallelExecutor>();
+    }
+    parallel_executor_->parallel_for(
+        item_count,
+        worker_count,
+        chunk_size_for(item_count, worker_count, parameters_.thread_chunk_size),
+        [fn = std::forward<Fn>(function)](std::uint32_t worker_index, std::size_t begin, std::size_t end) mutable {
+            fn(worker_index, begin, end);
+        });
 }
 
 void BoidSimulation::reset()
@@ -237,16 +394,13 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
 
     const std::uint32_t thread_count = metrics == nullptr ? parameters_.thread_count : 1U;
     const bool use_local_workspace = normalized_thread_count(thread_count, positions_.size()) > 1U;
-    parallel_for_ranges(positions_.size(), thread_count, [&](std::size_t begin, std::size_t end) {
-        std::vector<std::size_t> neighbor_indices;
-        std::vector<NeighborCandidate> selected_neighbors;
-        neighbor_indices.reserve(positions_.size());
-        selected_neighbors.reserve(positions_.size());
+    parallel_for_ranges(positions_.size(), thread_count, [&](std::uint32_t worker_index, std::size_t begin, std::size_t end) {
+        WorkerScratch& scratch = worker_scratch_[worker_index];
         for (std::size_t i = begin; i < end; ++i) {
             const Vector3 position = positions_[i];
             const Vector3 velocity = velocities_[i];
             NeighborQueryDiagnostics query_diagnostics{};
-            std::vector<std::size_t>& query_result = use_local_workspace ? neighbor_indices : neighbor_indices_;
+            std::vector<std::size_t>& query_result = use_local_workspace ? scratch.neighbor_indices : neighbor_indices_;
             spatial_hash_.query_neighbors(position, query_radius, query_result, query_diagnostics);
             if (metrics != nullptr) {
                 metrics->record_neighbor_query(query_diagnostics.candidates_tested, query_diagnostics.visited_cells);
@@ -258,7 +412,7 @@ void BoidSimulation::update_shared_flocking(float dt, SimulationMetrics* metrics
             const float effective_perception_radius = compute_effective_perception_radius(parameters_, local_candidate_count);
             const float effective_perception_radius_squared = effective_perception_radius * effective_perception_radius;
 
-            std::vector<NeighborCandidate>& selected = use_local_workspace ? selected_neighbors : selected_neighbors_;
+            std::vector<NeighborCandidate>& selected = use_local_workspace ? scratch.selected_neighbors : selected_neighbors_;
             selected.clear();
             std::size_t fov_rejected_count = 0;
             std::size_t radius_rejected_count = 0;
@@ -399,17 +553,14 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
 
     const std::uint32_t thread_count = metrics == nullptr ? parameters_.thread_count : 1U;
     const bool use_local_workspace = normalized_thread_count(thread_count, positions_.size()) > 1U;
-    parallel_for_ranges(positions_.size(), thread_count, [&](std::size_t begin, std::size_t end) {
-        std::vector<std::size_t> neighbor_indices;
-        std::vector<CellAggregate> aggregate_cells;
-        neighbor_indices.reserve(positions_.size());
-        aggregate_cells.reserve(positions_.size());
+    parallel_for_ranges(positions_.size(), thread_count, [&](std::uint32_t worker_index, std::size_t begin, std::size_t end) {
+        WorkerScratch& scratch = worker_scratch_[worker_index];
         for (std::size_t i = begin; i < end; ++i) {
             const Vector3 position = positions_[i];
             const Vector3 velocity = velocities_[i];
 
             NeighborQueryDiagnostics separation_diagnostics{};
-            std::vector<std::size_t>& separation_neighbors = use_local_workspace ? neighbor_indices : neighbor_indices_;
+            std::vector<std::size_t>& separation_neighbors = use_local_workspace ? scratch.neighbor_indices : neighbor_indices_;
             spatial_hash_.query_neighbors(position, parameters_.separation_radius, separation_neighbors, separation_diagnostics);
         if (metrics != nullptr) {
             metrics->record_neighbor_query(separation_diagnostics.candidates_tested, separation_diagnostics.visited_cells);
@@ -444,16 +595,16 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
                 social_query_radius,
                 velocity,
                 parameters_.field_of_view_degrees,
-                use_local_workspace ? aggregate_cells : aggregate_cells_,
+                use_local_workspace ? scratch.aggregate_cells : aggregate_cells_,
                 aggregate_diagnostics);
         } else {
             spatial_hash_.query_cell_aggregates(
-                position, social_query_radius, use_local_workspace ? aggregate_cells : aggregate_cells_, aggregate_diagnostics);
+                position, social_query_radius, use_local_workspace ? scratch.aggregate_cells : aggregate_cells_, aggregate_diagnostics);
         }
 
         std::size_t local_social_candidate_count = 0;
         const CellCoord own_cell = spatial_hash_.cell_for(position);
-            std::vector<CellAggregate>& social_aggregates = use_local_workspace ? aggregate_cells : aggregate_cells_;
+            std::vector<CellAggregate>& social_aggregates = use_local_workspace ? scratch.aggregate_cells : aggregate_cells_;
             for (CellAggregate& aggregate : social_aggregates) {
             if (aggregate.coord == own_cell) {
                 if (aggregate.count <= 1U) {
@@ -573,7 +724,8 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
 
 void BoidSimulation::integrate(float dt, ModelBehavior behavior, bool noise_active, std::uint64_t noise_step)
 {
-    parallel_for_ranges(positions_.size(), parameters_.thread_count, [&](std::size_t begin, std::size_t end) {
+    parallel_for_ranges(positions_.size(), parameters_.thread_count, [&](std::uint32_t worker_index, std::size_t begin, std::size_t end) {
+        (void)worker_index;
         for (std::size_t i = begin; i < end; ++i) {
             const Vector3 previous_velocity = velocities_[i];
         Vector3 desired_velocity = math::add(previous_velocity, math::scale(accelerations_[i], dt));

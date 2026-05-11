@@ -73,7 +73,20 @@ struct SimulationParameters {
     bool noise_enabled{false};
     // 0 selects a conservative automatic CPU worker count; 1 preserves the serial update path.
     std::uint32_t thread_count{1U};
+    // 0 keeps one contiguous range per worker. Non-zero enables smaller deterministic chunks for load-balance experiments.
+    std::uint32_t thread_chunk_size{0U};
 };
+
+[[nodiscard]] constexpr std::uint32_t automatic_thread_count_for_boids(std::size_t boid_count) noexcept
+{
+    if (boid_count < 512U) {
+        return 1U;
+    }
+    if (boid_count < 1024U) {
+        return 2U;
+    }
+    return 4U;
+}
 
 [[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept
 {
