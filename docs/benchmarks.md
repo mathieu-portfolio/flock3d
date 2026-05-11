@@ -217,7 +217,7 @@ Neighbor modes:
 Columns:
 
 ```text
-scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,integration_parallel_ms,serial_metrics_ms,speedup_vs_single_thread,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
+scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,integration_parallel_ms,serial_metrics_ms,rebuild_spatial_hash_ms,model_update_ms,integration_ms,metrics_ms,instrumented_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
 ```
 
 Run it when you want a compact model/mode timing comparison:
@@ -238,7 +238,7 @@ Run a scaling comparison for the currently tracked CPU sizes and modes by making
 scripts/run_benchmark.sh simulation_update -- --models ClassicBoids,BirdFlight,FishSchool,NoiseExperiment --modes fixed_radius_uncapped,fixed_radius_closest_k,adaptive_radius_closest_k,aggregate_social --threads 1,2,4,8,16 --counts 512,1024,2048,5096,10192
 ```
 
-Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, `worker_count_effective`, `boids_per_worker_*`, and `speedup_vs_single_thread` across worker counts. Empty `update_parallel_ms`, `integration_parallel_ms`, and `serial_metrics_ms` cells mean the benchmark timed the full update as a single unit for minimum measurement overhead. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if `boids_per_worker_min/max` are balanced but speedup flattens or regresses as worker count rises, suspect memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases rather than simple range imbalance.
+Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, `worker_count_effective`, `boids_per_worker_*`, and `speedup_vs_single_thread` across worker counts. The phase columns now break the full measured update into rebuild (`rebuild_spatial_hash_ms`), model/steering work excluding integration (`update_parallel_ms`/`model_update_ms`), integration (`integration_parallel_ms`/`integration_ms`), metrics bookkeeping (`serial_metrics_ms`/`metrics_ms`), and the internally instrumented total (`instrumented_update_ms`). `mean_update_ms` is still the outer wall-clock timing used for speedup, while the instrumented total helps attribute where time is spent. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if `boids_per_worker_min/max` are balanced but speedup flattens or regresses as worker count rises, suspect memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases rather than simple range imbalance.
 
 
 
