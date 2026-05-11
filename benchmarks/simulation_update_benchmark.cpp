@@ -127,13 +127,24 @@ void run_scenario(
 
     while (completed_ticks < total_ticks) {
         UpdateStats stats{};
+        UpdateStats rebuild_stats{};
+        UpdateStats model_update_stats{};
+        UpdateStats integration_stats{};
+        UpdateStats metrics_stats{};
+        UpdateStats instrumented_update_stats{};
         stats.samples_ms.reserve(sample_ticks);
         const std::size_t sample_start_tick = completed_ticks;
         while (completed_ticks < total_ticks && (stats.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
+            flock3d::sim::SimulationTimingDiagnostics timing_diagnostics{};
             const double milliseconds = flock3d::bench::time_ms([&]() {
-                simulation.update(flock3d::bench::fixed_dt, nullptr);
+                simulation.update(flock3d::bench::fixed_dt, nullptr, &timing_diagnostics);
             });
             stats.record(milliseconds);
+            rebuild_stats.record(timing_diagnostics.rebuild_spatial_hash_ms);
+            model_update_stats.record(timing_diagnostics.model_update_ms);
+            integration_stats.record(timing_diagnostics.integration_ms);
+            metrics_stats.record(timing_diagnostics.metrics_ms);
+            instrumented_update_stats.record(timing_diagnostics.total_update_ms);
             ++completed_ticks;
 
             const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
@@ -165,7 +176,10 @@ void run_scenario(
                   << boids_per_worker_min << ',' << boids_per_worker_max << ',' << parameters.thread_chunk_size << ','
                   << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
                   << ',' << stats.count << ',' << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms
-                  << ",,,," << speedup << ',' << parameters.random_seed << ',' << parameters.world_half_extent
+                  << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms() << ',' << metrics_stats.mean_ms()
+                  << ',' << rebuild_stats.mean_ms() << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms()
+                  << ',' << metrics_stats.mean_ms() << ',' << instrumented_update_stats.mean_ms()
+                  << ',' << speedup << ',' << parameters.random_seed << ',' << parameters.world_half_extent
                   << ',' << parameters.neighbor_radius << ',' << parameters.separation_radius << ',' << parameters.max_speed
                   << ',' << parameters.max_force << ',' << parameters.max_selected_neighbors << ','
                   << parameters.target_neighbor_count << ',' << (parameters.adaptive_perception_enabled ? "true" : "false") << '\n';
@@ -187,7 +201,8 @@ int main(int argc, char** argv)
     std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,"
                  "boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,"
                  "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,"
-                 "integration_parallel_ms,serial_metrics_ms,speedup_vs_single_thread,random_seed,world_half_extent,"
+                 "integration_parallel_ms,serial_metrics_ms,rebuild_spatial_hash_ms,model_update_ms,"
+                 "integration_ms,metrics_ms,instrumented_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,"
                  "neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,"
                  "adaptive_perception_enabled\n";
     for (const auto model : models) {

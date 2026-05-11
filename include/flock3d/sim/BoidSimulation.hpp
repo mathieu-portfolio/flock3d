@@ -14,6 +14,14 @@
 
 namespace flock3d::sim {
 
+struct SimulationTimingDiagnostics {
+    double total_update_ms{};
+    double rebuild_spatial_hash_ms{};
+    double model_update_ms{};
+    double integration_ms{};
+    double metrics_ms{};
+};
+
 class BoidSimulation {
 public:
     explicit BoidSimulation(SimulationParameters parameters = {});
@@ -23,6 +31,7 @@ public:
     void reset(std::uint32_t boid_count);
     void apply_parameters(const SimulationParameters& parameters);
     void update(float dt, SimulationMetrics* metrics = nullptr);
+    void update(float dt, SimulationMetrics* metrics, SimulationTimingDiagnostics* timing_diagnostics);
     void add_boid(Vector3 position, Vector3 velocity);
 
     [[nodiscard]] const std::vector<Vector3>& positions() const noexcept { return positions_; }
@@ -96,6 +105,7 @@ private:
     std::vector<WorkerScratch> worker_scratch_;
     std::unique_ptr<ParallelExecutor> parallel_executor_;
     std::uint64_t noise_step_{};
+    SimulationTimingDiagnostics* active_timing_diagnostics_{};
 };
 
 } // namespace flock3d::sim
