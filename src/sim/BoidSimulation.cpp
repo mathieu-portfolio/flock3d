@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <functional>
@@ -17,6 +18,13 @@
 
 namespace flock3d::sim {
 namespace {
+
+using TimingClock = std::chrono::steady_clock;
+
+[[nodiscard]] double elapsed_milliseconds(TimingClock::time_point begin, TimingClock::time_point end) noexcept
+{
+    return std::chrono::duration<double, std::milli>{end - begin}.count();
+}
 
 [[nodiscard]] Vector3 random_direction(std::mt19937& rng)
 {
@@ -283,10 +291,22 @@ void BoidSimulation::apply_parameters(const SimulationParameters& parameters)
 
 void BoidSimulation::update(float dt, SimulationMetrics* metrics)
 {
+    update(dt, metrics, nullptr);
+}
+
+void BoidSimulation::update(float dt, SimulationMetrics* metrics, SimulationTimingDiagnostics* timing_diagnostics)
+{
+    if (timing_diagnostics != nullptr) {
+        *timing_diagnostics = SimulationTimingDiagnostics{};
+    }
+    active_timing_diagnostics_ = timing_diagnostics;
+    const auto update_begin = TimingClock::now();
+
     if (metrics != nullptr) {
         metrics->begin_simulation_step();
     }
 
+    const auto rebuild_begin = TimingClock::now();
     const float query_radius = effective_query_radius(parameters_);
     if (parameters_.spatial_cell_size != query_radius) {
         parameters_.spatial_cell_size = query_radius;
@@ -294,8 +314,20 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
     }
 
     rebuild_spatial_hash();
-    update_model(dt, metrics);
+    const auto rebuild_end = TimingClock::now();
+    if (timing_diagnostics != nullptr) {
+        timing_diagnostics->rebuild_spatial_hash_ms = elapsed_milliseconds(rebuild_begin, rebuild_end);
+    }
 
+    const auto model_begin = TimingClock::now();
+    update_model(dt, metrics);
+    const auto model_end = TimingClock::now();
+    if (timing_diagnostics != nullptr) {
+        const double model_total_ms = elapsed_milliseconds(model_begin, model_end);
+        timing_diagnostics->model_update_ms = std::max(0.0, model_total_ms - timing_diagnostics->integration_ms);
+    }
+
+    const auto metrics_begin = TimingClock::now();
     if (metrics != nullptr) {
         record_collective_metrics(*metrics);
         metrics->finish_simulation_step(
@@ -304,6 +336,12 @@ void BoidSimulation::update(float dt, SimulationMetrics* metrics)
             spatial_hash_.average_cell_occupancy(),
             spatial_hash_.max_cell_occupancy());
     }
+    const auto metrics_end = TimingClock::now();
+    if (timing_diagnostics != nullptr) {
+        timing_diagnostics->metrics_ms = elapsed_milliseconds(metrics_begin, metrics_end);
+        timing_diagnostics->total_update_ms = elapsed_milliseconds(update_begin, metrics_end);
+    }
+    active_timing_diagnostics_ = nullptr;
 }
 
 void BoidSimulation::update_model(float dt, SimulationMetrics* metrics)
@@ -728,6 +766,7 @@ void BoidSimulation::update_cell_aggregate_social(float dt, SimulationMetrics* m
 
 void BoidSimulation::integrate(float dt, ModelBehavior behavior, bool noise_active, std::uint64_t noise_step)
 {
+    const auto integration_begin = TimingClock::now();
     parallel_for_ranges(positions_.size(), parameters_.thread_count, [&](std::uint32_t worker_index, std::size_t begin, std::size_t end) {
         (void)worker_index;
         for (std::size_t i = begin; i < end; ++i) {
@@ -761,6 +800,10 @@ void BoidSimulation::integrate(float dt, ModelBehavior behavior, bool noise_acti
             wrap_position(positions_[i]);
         }
     });
+    const auto integration_end = TimingClock::now();
+    if (active_timing_diagnostics_ != nullptr) {
+        active_timing_diagnostics_->integration_ms += elapsed_milliseconds(integration_begin, integration_end);
+    }
 
     if (behavior.apply_noise) {
         ++noise_step_;
