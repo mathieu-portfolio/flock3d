@@ -45,6 +45,12 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         primary_metric="mean_update_ms",
         time_metrics=("mean_update_ms", "min_update_ms", "max_update_ms"),
         scaling_metrics=("mean_update_ms", "min_update_ms", "max_update_ms"),
+        diagnostic_metrics=(
+            "parallel_workspace_ms",
+            "parallel_dispatch_ms",
+            "parallel_for_calls_mean",
+            "parallel_worker_count_mean",
+        ),
     ),
     BenchmarkSpec(
         name="spatial_hash",
@@ -90,6 +96,7 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         time_metrics=("mean_update_ms", "min_update_ms", "max_update_ms"),
         scaling_metrics=("mean_update_ms", "min_update_ms", "max_update_ms"),
         diagnostic_metrics=(
+            "mean_metrics_update_ms",
             "visible_aggregate_cells_mean",
             "rejected_aggregate_cells_mean",
             "aggregate_cells_used_mean",

@@ -132,6 +132,10 @@ void run_scenario(
         UpdateStats integration_stats{};
         UpdateStats metrics_stats{};
         UpdateStats instrumented_update_stats{};
+        UpdateStats parallel_workspace_stats{};
+        UpdateStats parallel_dispatch_stats{};
+        double parallel_for_calls_total = 0.0;
+        double parallel_worker_count_total = 0.0;
         stats.samples_ms.reserve(sample_ticks);
         const std::size_t sample_start_tick = completed_ticks;
         while (completed_ticks < total_ticks && (stats.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
@@ -145,6 +149,10 @@ void run_scenario(
             integration_stats.record(timing_diagnostics.integration_ms);
             metrics_stats.record(timing_diagnostics.metrics_ms);
             instrumented_update_stats.record(timing_diagnostics.total_update_ms);
+            parallel_workspace_stats.record(timing_diagnostics.parallel_workspace_ms);
+            parallel_dispatch_stats.record(timing_diagnostics.parallel_dispatch_ms);
+            parallel_for_calls_total += static_cast<double>(timing_diagnostics.parallel_for_calls);
+            parallel_worker_count_total += static_cast<double>(timing_diagnostics.parallel_worker_count_total);
             ++completed_ticks;
 
             const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
@@ -171,6 +179,8 @@ void run_scenario(
         const std::size_t boids_per_worker_max = effective_workers > 0U
             ? base_boids_per_worker + (remainder_boids > 0U ? 1U : 0U)
             : 0U;
+        const double parallel_for_calls_mean = stats.count > 0U ? parallel_for_calls_total / static_cast<double>(stats.count) : 0.0;
+        const double parallel_worker_count_mean = stats.count > 0U ? parallel_worker_count_total / static_cast<double>(stats.count) : 0.0;
         std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << neighbor_mode.name << ',' << boid_count
                   << ',' << thread_count << ',' << effective_workers << ',' << boids_per_worker_mean << ','
                   << boids_per_worker_min << ',' << boids_per_worker_max << ',' << parameters.thread_chunk_size << ','
@@ -179,6 +189,8 @@ void run_scenario(
                   << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms() << ',' << metrics_stats.mean_ms()
                   << ',' << rebuild_stats.mean_ms() << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms()
                   << ',' << metrics_stats.mean_ms() << ',' << instrumented_update_stats.mean_ms()
+                  << ',' << parallel_workspace_stats.mean_ms() << ',' << parallel_dispatch_stats.mean_ms()
+                  << ',' << parallel_for_calls_mean << ',' << parallel_worker_count_mean
                   << ',' << speedup << ',' << parameters.random_seed << ',' << parameters.world_half_extent
                   << ',' << parameters.neighbor_radius << ',' << parameters.separation_radius << ',' << parameters.max_speed
                   << ',' << parameters.max_force << ',' << parameters.max_selected_neighbors << ','
@@ -202,7 +214,8 @@ int main(int argc, char** argv)
                  "boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,"
                  "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,"
                  "integration_parallel_ms,serial_metrics_ms,rebuild_spatial_hash_ms,model_update_ms,"
-                 "integration_ms,metrics_ms,instrumented_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,"
+                 "integration_ms,metrics_ms,instrumented_update_ms,parallel_workspace_ms,parallel_dispatch_ms,"
+                 "parallel_for_calls_mean,parallel_worker_count_mean,speedup_vs_single_thread,random_seed,world_half_extent,"
                  "neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,"
                  "adaptive_perception_enabled\n";
     for (const auto model : models) {

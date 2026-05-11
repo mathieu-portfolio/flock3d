@@ -170,11 +170,17 @@ void run_scenario(
     parameters.thread_count = thread_count;
     parameters.thread_chunk_size = options.thread_chunk_size;
     flock3d::sim::BoidSimulation simulation{parameters};
+    // SimulationMetrics recording is intentionally serial inside BoidSimulation to avoid
+    // contended metric writes. Keep diagnostics on a separate simulation so the timed
+    // aggregate-social update exercises the requested thread count instead of measuring
+    // serial instrumentation plus parallel integration overhead.
+    flock3d::sim::BoidSimulation diagnostic_simulation{parameters};
     flock3d::sim::SimulationMetrics metrics{};
 
     const std::size_t warmup_ticks = flock3d::bench::simulated_seconds_to_ticks(options.warmup_seconds);
     for (std::size_t tick = 0; tick < warmup_ticks; ++tick) {
-        simulation.update(flock3d::bench::fixed_dt, &metrics);
+        simulation.update(flock3d::bench::fixed_dt, nullptr);
+        diagnostic_simulation.update(flock3d::bench::fixed_dt, &metrics);
     }
 
     const std::size_t total_ticks = flock3d::bench::simulated_seconds_to_ticks(options.duration_seconds);
@@ -184,14 +190,19 @@ void run_scenario(
 
     while (completed_ticks < total_ticks) {
         UpdateStats stats{};
+        UpdateStats metrics_update_stats{};
         stats.samples_ms.reserve(sample_ticks);
         AggregateSocialDiagnostics diagnostics{};
         const std::size_t sample_start_tick = completed_ticks;
         while (completed_ticks < total_ticks && (stats.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
             const double milliseconds = flock3d::bench::time_ms([&]() {
-                simulation.update(flock3d::bench::fixed_dt, &metrics);
+                simulation.update(flock3d::bench::fixed_dt, nullptr);
+            });
+            const double metrics_milliseconds = flock3d::bench::time_ms([&]() {
+                diagnostic_simulation.update(flock3d::bench::fixed_dt, &metrics);
             });
             stats.record(milliseconds);
+            metrics_update_stats.record(metrics_milliseconds);
             diagnostics.record(metrics);
             ++completed_ticks;
 
@@ -202,9 +213,10 @@ void run_scenario(
         }
 
         const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
-        std::cout << flock3d::bench::model_name(model) << ',' << variant.name << ',' << boid_count << ',' << thread_count << ',' << std::fixed
-                  << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
-                  << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms << ",true,"
+        const std::uint32_t effective_workers = simulation.effective_thread_count();
+        std::cout << flock3d::bench::model_name(model) << ',' << variant.name << ',' << boid_count << ',' << thread_count << ','
+                  << effective_workers << ',' << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
+                  << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms << ',' << metrics_update_stats.mean_ms() << ",true,"
                   << (variant.social_fov_enabled ? "true" : "false") << ','
                   << (variant.adaptive_social_radius_enabled ? "true" : "false") << ','
                   << diagnostics.visible_aggregate_cells_mean_value() << ','
@@ -232,8 +244,8 @@ int main(int argc, char** argv)
     const auto models = selected_models(options);
     const auto variants = selected_variants(options);
 
-    std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
-                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,aggregate_social_enabled,social_fov_enabled,"
+    std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,worker_count_effective,elapsed_seconds,sample_index,"
+                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,mean_metrics_update_ms,aggregate_social_enabled,social_fov_enabled,"
                  "adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,"
                  "aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,"
                  "aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,"
