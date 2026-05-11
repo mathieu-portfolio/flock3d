@@ -129,3 +129,39 @@ TEST_CASE("Common benchmark thread count parser deduplicates requested workers",
     CHECK(counts[1] == 2U);
     CHECK(counts[2] == 4U);
 }
+
+TEST_CASE("Common benchmark list parsers validate comma-separated values", "[benchmark][common][options]")
+{
+    const auto counts = flock3d::bench::parse_positive_integer_list("512,1024,1024");
+    REQUIRE(counts.size() == 2U);
+    CHECK(counts[0] == 512U);
+    CHECK(counts[1] == 1024U);
+
+    CHECK(flock3d::bench::parse_positive_integer_list("512,zero").empty());
+
+    const auto names = flock3d::bench::parse_string_list("BirdFlight, FishSchool,BirdFlight");
+    REQUIRE(names.size() == 2U);
+    CHECK(names[0] == "BirdFlight");
+    CHECK(names[1] == "FishSchool");
+}
+
+TEST_CASE("Common benchmark boolean parser accepts explicit CLI forms", "[benchmark][common][options]")
+{
+    REQUIRE(flock3d::bench::parse_bool("on").has_value());
+    CHECK(*flock3d::bench::parse_bool("on"));
+    CHECK(*flock3d::bench::parse_bool("true"));
+    CHECK(*flock3d::bench::parse_bool("1"));
+    CHECK_FALSE(*flock3d::bench::parse_bool("off"));
+    CHECK_FALSE(*flock3d::bench::parse_bool("false"));
+    CHECK_FALSE(*flock3d::bench::parse_bool("0"));
+    CHECK_FALSE(flock3d::bench::parse_bool("maybe").has_value());
+}
+
+TEST_CASE("Common benchmark model parser validates known model names", "[benchmark][common][options]")
+{
+    const auto models = flock3d::bench::parse_model_list("BirdFlight,fish_school");
+    REQUIRE(models.size() == 2U);
+    CHECK(models[0] == flock3d::sim::SimulationModel::BirdFlight);
+    CHECK(models[1] == flock3d::sim::SimulationModel::FishSchool);
+    CHECK(flock3d::bench::parse_model_list("UnknownModel").empty());
+}

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string_view>
 #include <vector>
+#include <cstdlib>
 
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/SimulationParameters.hpp>
@@ -22,6 +23,69 @@ struct NeighborMode {
     std::size_t max_selected_neighbors{};
     flock3d::sim::NeighborMode mode{};
 };
+
+
+constexpr NeighborMode all_neighbor_modes[] = {
+    NeighborMode{"fixed_radius_uncapped", false, 0U, flock3d::sim::NeighborMode::FixedRadiusUncapped},
+    NeighborMode{"fixed_radius_closest_k", false, 32U, flock3d::sim::NeighborMode::FixedRadiusClosestK},
+    NeighborMode{"adaptive_radius_closest_k", true, 32U, flock3d::sim::NeighborMode::AdaptiveRadiusClosestK},
+    NeighborMode{"aggregate_social", true, 32U, flock3d::sim::NeighborMode::CellAggregateSocial},
+};
+
+std::vector<flock3d::sim::SimulationModel> selected_models(const BenchmarkOptions& options)
+{
+    if (options.model_filters.empty()) {
+        if (options.full_matrix) {
+            return {
+                flock3d::sim::SimulationModel::ClassicBoids,
+                flock3d::sim::SimulationModel::BirdFlight,
+                flock3d::sim::SimulationModel::FishSchool,
+                flock3d::sim::SimulationModel::NoiseExperiment,
+            };
+        }
+        return {flock3d::sim::SimulationModel::ClassicBoids};
+    }
+
+    std::vector<flock3d::sim::SimulationModel> models;
+    for (const std::string& filter : options.model_filters) {
+        const auto model = flock3d::bench::parse_model_name(filter);
+        if (!model.has_value()) {
+            std::cerr << "Unknown model '" << filter << "'. Known models: ClassicBoids, BirdFlight, FishSchool, NoiseExperiment\n";
+            flock3d::bench::print_usage("flock3d_simulation_update_benchmark");
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::find(models.begin(), models.end(), *model) == models.end()) {
+            models.push_back(*model);
+        }
+    }
+    return models;
+}
+
+std::vector<NeighborMode> selected_neighbor_modes(const BenchmarkOptions& options)
+{
+    if (options.mode_filters.empty()) {
+        if (options.full_matrix) {
+            return {std::begin(all_neighbor_modes), std::end(all_neighbor_modes)};
+        }
+        return {all_neighbor_modes[2]};
+    }
+
+    std::vector<NeighborMode> modes;
+    for (const std::string& filter : options.mode_filters) {
+        const auto match = std::find_if(std::begin(all_neighbor_modes), std::end(all_neighbor_modes), [&](NeighborMode mode) {
+            return flock3d::bench::normalized_name_equal(filter, mode.name);
+        });
+        if (match == std::end(all_neighbor_modes)) {
+            std::cerr << "Unknown mode '" << filter << "'. Known modes: fixed_radius_uncapped, fixed_radius_closest_k, adaptive_radius_closest_k, aggregate_social\n";
+            flock3d::bench::print_usage("flock3d_simulation_update_benchmark");
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::find_if(modes.begin(), modes.end(), [&](NeighborMode mode) { return mode.name == match->name; }) == modes.end()) {
+            modes.push_back(*match);
+        }
+    }
+    return modes;
+}
 
 void apply_neighbor_mode(flock3d::sim::SimulationParameters& parameters, NeighborMode mode)
 {
@@ -44,8 +108,10 @@ void run_scenario(
     std::uint32_t thread_count,
     std::vector<double>& single_thread_sample_means)
 {
-    auto parameters = flock3d::bench::parameters_for_model(model, boid_count, 12'345U + boid_count);
+    const std::uint32_t seed = options.seed.value_or(12'345U + boid_count);
+    auto parameters = flock3d::bench::parameters_for_model(model, boid_count, seed);
     apply_neighbor_mode(parameters, neighbor_mode);
+    flock3d::bench::apply_parameter_overrides(parameters, options);
     parameters.thread_count = thread_count;
     parameters.thread_chunk_size = options.thread_chunk_size;
     flock3d::sim::BoidSimulation simulation{parameters};
@@ -99,7 +165,10 @@ void run_scenario(
                   << boids_per_worker_min << ',' << boids_per_worker_max << ',' << parameters.thread_chunk_size << ','
                   << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
                   << ',' << stats.count << ',' << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms
-                  << ",,,," << speedup << '\n';
+                  << ",,,," << speedup << ',' << parameters.random_seed << ',' << parameters.world_half_extent
+                  << ',' << parameters.neighbor_radius << ',' << parameters.separation_radius << ',' << parameters.max_speed
+                  << ',' << parameters.max_force << ',' << parameters.max_selected_neighbors << ','
+                  << parameters.target_neighbor_count << ',' << (parameters.adaptive_perception_enabled ? "true" : "false") << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -112,23 +181,16 @@ int main(int argc, char** argv)
     const BenchmarkOptions options = flock3d::bench::parse_options(argc, argv);
     ProgressBar progress{flock3d::bench::progress_enabled()};
 
-    constexpr NeighborMode neighbor_modes[] = {
-        NeighborMode{"fixed_radius_uncapped", false, 0U, flock3d::sim::NeighborMode::FixedRadiusUncapped},
-        NeighborMode{"fixed_radius_closest_k", false, 32U, flock3d::sim::NeighborMode::FixedRadiusClosestK},
-        NeighborMode{"adaptive_radius_closest_k", true, 32U, flock3d::sim::NeighborMode::AdaptiveRadiusClosestK},
-        NeighborMode{"aggregate_social", true, 32U, flock3d::sim::NeighborMode::CellAggregateSocial},
-    };
+    const auto models = selected_models(options);
+    const auto neighbor_modes = selected_neighbor_modes(options);
 
     std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,"
                  "boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,"
                  "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,"
-                 "integration_parallel_ms,serial_metrics_ms,speedup_vs_single_thread\n";
-    for (const auto model : {
-             flock3d::sim::SimulationModel::ClassicBoids,
-             flock3d::sim::SimulationModel::BirdFlight,
-             flock3d::sim::SimulationModel::FishSchool,
-             flock3d::sim::SimulationModel::NoiseExperiment,
-         }) {
+                 "integration_parallel_ms,serial_metrics_ms,speedup_vs_single_thread,random_seed,world_half_extent,"
+                 "neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,"
+                 "adaptive_perception_enabled\n";
+    for (const auto model : models) {
         for (const std::uint32_t boid_count : options.boid_counts) {
             for (const NeighborMode neighbor_mode : neighbor_modes) {
                 std::vector<double> single_thread_sample_means;

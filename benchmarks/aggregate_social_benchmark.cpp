@@ -7,6 +7,8 @@
 #include <iostream>
 #include <limits>
 #include <string_view>
+#include <cstdlib>
+#include <vector>
 
 #include <flock3d/sim/BoidSimulation.hpp>
 #include <flock3d/sim/SimulationMetrics.hpp>
@@ -23,6 +25,69 @@ struct AggregateSocialVariant {
     bool social_fov_enabled{};
     bool adaptive_social_radius_enabled{};
 };
+
+
+constexpr AggregateSocialVariant all_variants[] = {
+    {"cell_aggregate_social_no_fov", false, false},
+    {"cell_aggregate_social_fov", true, false},
+    {"cell_aggregate_social_adaptive_radius", false, true},
+    {"cell_aggregate_social_fov_adaptive_radius", true, true},
+};
+
+std::vector<flock3d::sim::SimulationModel> selected_models(const BenchmarkOptions& options)
+{
+    if (options.model_filters.empty()) {
+        if (options.full_matrix) {
+            return {
+                flock3d::sim::SimulationModel::ClassicBoids,
+                flock3d::sim::SimulationModel::BirdFlight,
+                flock3d::sim::SimulationModel::FishSchool,
+                flock3d::sim::SimulationModel::NoiseExperiment,
+            };
+        }
+        return {flock3d::sim::SimulationModel::ClassicBoids};
+    }
+
+    std::vector<flock3d::sim::SimulationModel> models;
+    for (const std::string& filter : options.model_filters) {
+        const auto model = flock3d::bench::parse_model_name(filter);
+        if (!model.has_value()) {
+            std::cerr << "Unknown model '" << filter << "'. Known models: ClassicBoids, BirdFlight, FishSchool, NoiseExperiment\n";
+            flock3d::bench::print_usage("flock3d_aggregate_social_benchmark");
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::find(models.begin(), models.end(), *model) == models.end()) {
+            models.push_back(*model);
+        }
+    }
+    return models;
+}
+
+std::vector<AggregateSocialVariant> selected_variants(const BenchmarkOptions& options)
+{
+    if (options.mode_filters.empty()) {
+        if (options.full_matrix) {
+            return {std::begin(all_variants), std::end(all_variants)};
+        }
+        return {all_variants[2]};
+    }
+
+    std::vector<AggregateSocialVariant> variants;
+    for (const std::string& filter : options.mode_filters) {
+        const auto match = std::find_if(std::begin(all_variants), std::end(all_variants), [&](AggregateSocialVariant variant) {
+            return flock3d::bench::normalized_name_equal(filter, variant.name);
+        });
+        if (match == std::end(all_variants)) {
+            std::cerr << "Unknown aggregate social mode '" << filter << "'. Known modes: cell_aggregate_social_no_fov, cell_aggregate_social_fov, cell_aggregate_social_adaptive_radius, cell_aggregate_social_fov_adaptive_radius\n";
+            flock3d::bench::print_usage("flock3d_aggregate_social_benchmark");
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::find_if(variants.begin(), variants.end(), [&](AggregateSocialVariant variant) { return variant.name == match->name; }) == variants.end()) {
+            variants.push_back(*match);
+        }
+    }
+    return variants;
+}
 
 struct AggregateSocialDiagnostics {
     double aggregate_query_radius_total{};
@@ -71,12 +136,13 @@ struct AggregateSocialDiagnostics {
     [[nodiscard]] double social_weight_sum_mean_value() const noexcept { return mean(social_weight_sum_mean); }
 };
 
-flock3d::sim::SimulationParameters aggregate_social_parameters(std::uint32_t boid_count, const AggregateSocialVariant& variant)
+flock3d::sim::SimulationParameters aggregate_social_parameters(
+    flock3d::sim::SimulationModel model,
+    std::uint32_t boid_count,
+    std::uint32_t seed,
+    const AggregateSocialVariant& variant)
 {
-    auto parameters = flock3d::bench::parameters_for_model(
-        flock3d::sim::SimulationModel::ClassicBoids,
-        boid_count,
-        44'000U + boid_count);
+    auto parameters = flock3d::bench::parameters_for_model(model, boid_count, seed);
     parameters.neighbor_mode = flock3d::sim::NeighborMode::CellAggregateSocial;
     parameters.base_perception_radius = parameters.neighbor_radius;
     parameters.min_perception_radius = parameters.neighbor_radius * 0.5F;
@@ -91,14 +157,18 @@ flock3d::sim::SimulationParameters aggregate_social_parameters(std::uint32_t boi
 }
 
 void run_scenario(
+    flock3d::sim::SimulationModel model,
     const AggregateSocialVariant& variant,
     std::uint32_t boid_count,
     const BenchmarkOptions& options,
     ProgressBar& progress,
     std::uint32_t thread_count)
 {
-    auto parameters = aggregate_social_parameters(boid_count, variant);
+    const std::uint32_t seed = options.seed.value_or(44'000U + boid_count);
+    auto parameters = aggregate_social_parameters(model, boid_count, seed, variant);
+    flock3d::bench::apply_parameter_overrides(parameters, options);
     parameters.thread_count = thread_count;
+    parameters.thread_chunk_size = options.thread_chunk_size;
     flock3d::sim::BoidSimulation simulation{parameters};
     flock3d::sim::SimulationMetrics metrics{};
 
@@ -132,7 +202,7 @@ void run_scenario(
         }
 
         const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
-        std::cout << "baseline," << variant.name << ',' << boid_count << ',' << thread_count << ',' << std::fixed
+        std::cout << flock3d::bench::model_name(model) << ',' << variant.name << ',' << boid_count << ',' << thread_count << ',' << std::fixed
                   << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
                   << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms << ",true,"
                   << (variant.social_fov_enabled ? "true" : "false") << ','
@@ -143,7 +213,11 @@ void run_scenario(
                   << diagnostics.aggregate_query_radius_min_or_zero() << ',' << diagnostics.aggregate_query_radius_max << ','
                   << diagnostics.exact_separation_neighbors_mean_value() << ','
                   << diagnostics.exact_separation_neighbors_max << ',' << diagnostics.social_weight_sum_mean_value() << ','
-                  << diagnostics.flock_spread << ',' << diagnostics.polarization << '\n';
+                  << diagnostics.flock_spread << ',' << diagnostics.polarization << ',' << parameters.random_seed
+                  << ',' << parameters.world_half_extent << ',' << parameters.neighbor_radius << ','
+                  << parameters.separation_radius << ',' << parameters.max_speed << ',' << parameters.max_force
+                  << ',' << parameters.max_selected_neighbors << ',' << parameters.target_neighbor_count << ','
+                  << (parameters.adaptive_perception_enabled ? "true" : "false") << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -155,23 +229,23 @@ int main(int argc, char** argv)
 {
     const BenchmarkOptions options = flock3d::bench::parse_options(argc, argv);
     ProgressBar progress{flock3d::bench::progress_enabled()};
-    constexpr AggregateSocialVariant variants[] = {
-        {"cell_aggregate_social_no_fov", false, false},
-        {"cell_aggregate_social_fov", true, false},
-        {"cell_aggregate_social_adaptive_radius", false, true},
-        {"cell_aggregate_social_fov_adaptive_radius", true, true},
-    };
+    const auto models = selected_models(options);
+    const auto variants = selected_variants(options);
 
     std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
                  "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,aggregate_social_enabled,social_fov_enabled,"
                  "adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,"
                  "aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,"
                  "aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,"
-                 "social_weight_sum_mean,flock_spread,polarization\n";
-    for (const std::uint32_t boid_count : options.boid_counts) {
-        for (const AggregateSocialVariant& variant : variants) {
-            for (const std::uint32_t thread_count : options.thread_counts) {
-                run_scenario(variant, boid_count, options, progress, thread_count);
+                 "social_weight_sum_mean,flock_spread,polarization,random_seed,world_half_extent,neighbor_radius,"
+                 "separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,"
+                 "adaptive_perception_enabled\n";
+    for (const auto model : models) {
+        for (const std::uint32_t boid_count : options.boid_counts) {
+            for (const AggregateSocialVariant& variant : variants) {
+                for (const std::uint32_t thread_count : options.thread_counts) {
+                    run_scenario(model, variant, boid_count, options, progress, thread_count);
+                }
             }
         }
     }
