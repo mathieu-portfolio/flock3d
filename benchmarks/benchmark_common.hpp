@@ -380,7 +380,7 @@ inline void apply_full_matrix_defaults(BenchmarkOptions& options)
     options.sample_seconds = full_matrix_sample_seconds;
     options.warmup_seconds = full_matrix_warmup_seconds;
     options.thread_counts = {1U, 2U, 4U, 8U, 16U};
-    options.boid_counts = {512U, 1024U, 2048U, 5096U, 10192U};
+    options.boid_counts = {128U, 256U, 512U, 1024U};
 }
 
 inline BenchmarkOptions parse_options(int argc, char** argv)
