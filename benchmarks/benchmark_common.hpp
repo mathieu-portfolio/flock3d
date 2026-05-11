@@ -233,13 +233,35 @@ inline bool progress_enabled_for_streams(bool stdout_is_terminal, bool stderr_is
     return stderr_is_terminal;
 }
 
+inline bool progress_enabled_for_mode(std::string_view mode, bool auto_enabled) noexcept
+{
+    if (mode.empty() || mode == "auto") {
+        return auto_enabled;
+    }
+    if (mode == "always" || mode == "1" || mode == "true" || mode == "yes" || mode == "on") {
+        return true;
+    }
+    if (mode == "never" || mode == "0" || mode == "false" || mode == "no" || mode == "off") {
+        return false;
+    }
+    return auto_enabled;
+}
+
 inline bool progress_enabled() noexcept
 {
 #if defined(_WIN32)
-    return progress_enabled_for_streams(stream_is_terminal(_fileno(stdout)), stream_is_terminal(_fileno(stderr)));
+    const bool auto_enabled = progress_enabled_for_streams(
+        stream_is_terminal(_fileno(stdout)),
+        stream_is_terminal(_fileno(stderr)));
 #else
-    return progress_enabled_for_streams(stream_is_terminal(STDOUT_FILENO), stream_is_terminal(STDERR_FILENO));
+    const bool auto_enabled = progress_enabled_for_streams(
+        stream_is_terminal(STDOUT_FILENO),
+        stream_is_terminal(STDERR_FILENO));
 #endif
+    const char* progress_mode = std::getenv("FLOCK3D_BENCHMARK_PROGRESS");
+    return progress_enabled_for_mode(
+        progress_mode != nullptr ? std::string_view{progress_mode} : std::string_view{},
+        auto_enabled);
 }
 
 class ProgressBar {

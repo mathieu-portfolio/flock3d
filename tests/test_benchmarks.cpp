@@ -8,12 +8,26 @@
 #include <stdexcept>
 #include <vector>
 
-TEST_CASE("Benchmark progress only requires an interactive stderr", "[benchmark][progress]")
+TEST_CASE("Benchmark progress only requires an interactive stderr by default", "[benchmark][progress]")
 {
     CHECK(flock3d::bench::progress_enabled_for_streams(true, true));
     CHECK(flock3d::bench::progress_enabled_for_streams(false, true));
     CHECK_FALSE(flock3d::bench::progress_enabled_for_streams(true, false));
     CHECK_FALSE(flock3d::bench::progress_enabled_for_streams(false, false));
+}
+
+TEST_CASE("Benchmark progress environment mode can override terminal detection", "[benchmark][progress]")
+{
+    CHECK(flock3d::bench::progress_enabled_for_mode("always", false));
+    CHECK(flock3d::bench::progress_enabled_for_mode("1", false));
+    CHECK(flock3d::bench::progress_enabled_for_mode("true", false));
+    CHECK_FALSE(flock3d::bench::progress_enabled_for_mode("never", true));
+    CHECK_FALSE(flock3d::bench::progress_enabled_for_mode("0", true));
+    CHECK_FALSE(flock3d::bench::progress_enabled_for_mode("false", true));
+    CHECK(flock3d::bench::progress_enabled_for_mode("auto", true));
+    CHECK_FALSE(flock3d::bench::progress_enabled_for_mode("auto", false));
+    CHECK(flock3d::bench::progress_enabled_for_mode("unexpected", true));
+    CHECK_FALSE(flock3d::bench::progress_enabled_for_mode("unexpected", false));
 }
 
 TEST_CASE("Common benchmark windows convert simulated seconds to fixed ticks", "[benchmark][common]")
