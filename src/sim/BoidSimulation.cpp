@@ -106,10 +106,19 @@ private:
             return;
         }
         stop();
+        std::size_t observed_generation{};
+        {
+            std::lock_guard lock{mutex_};
+            observed_generation = generation_;
+        }
+        // Capture the generation before publishing the next task. A newly spawned
+        // worker may not start running until after the main thread increments the
+        // generation, and reading it inside worker_loop would make that worker
+        // miss the task it was counted as active for.
         workers_.reserve(background_worker_count);
         for (std::size_t index = 0; index < background_worker_count; ++index) {
-            workers_.emplace_back([this, worker_index = static_cast<std::uint32_t>(index + 1U)]() {
-                worker_loop(worker_index);
+            workers_.emplace_back([this, worker_index = static_cast<std::uint32_t>(index + 1U), observed_generation]() {
+                worker_loop(worker_index, observed_generation);
             });
         }
     }
@@ -131,13 +140,8 @@ private:
         stop_requested_ = false;
     }
 
-    void worker_loop(std::uint32_t worker_index)
+    void worker_loop(std::uint32_t worker_index, std::size_t observed_generation)
     {
-        std::size_t observed_generation{};
-        {
-            std::lock_guard lock{mutex_};
-            observed_generation = generation_;
-        }
         while (true) {
             {
                 std::unique_lock lock{mutex_};
