@@ -40,8 +40,9 @@ struct BenchmarkOptions {
     double duration_seconds{default_duration_seconds};
     double sample_seconds{default_sample_seconds};
     double warmup_seconds{default_warmup_seconds};
-    std::vector<std::uint32_t> thread_counts{1U, 2U, 4U};
-    std::vector<std::uint32_t> boid_counts{64U, 128U, 256U, 384U};
+    std::uint32_t thread_chunk_size{0U};
+    std::vector<std::uint32_t> thread_counts{1U, 2U, 4U, 8U, 16U};
+    std::vector<std::uint32_t> boid_counts{512U, 1024U, 2048U, 5096U, 10192U};
 };
 
 inline void append_hardware_thread_count(std::vector<std::uint32_t>& thread_counts)
@@ -161,7 +162,7 @@ struct UpdateStats {
 inline void print_usage(std::string_view executable)
 {
     std::cerr << "Usage: " << executable
-              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds] [--threads 1,2,4] [--counts 64,128]\n"
+              << " [--duration simulated-seconds] [--sample simulated-seconds] [--warmup simulated-seconds] [--threads 1,2,4] [--counts 512,1024] [--chunk-size boids]\n"
               << "CSV is printed to stdout. Benchmarks advance simulated time as fast as possible; progress is printed to stderr only when stderr is a terminal.\n";
 }
 
@@ -189,6 +190,8 @@ inline BenchmarkOptions parse_options(int argc, char** argv)
             options.warmup_seconds = std::max(0.0, value);
         } else if (argument == "--threads") {
             options.thread_counts = parse_positive_counts(argv[index]);
+        } else if (argument == "--chunk-size") {
+            options.thread_chunk_size = static_cast<std::uint32_t>(std::max(0, std::atoi(argv[index])));
         } else if (argument == "--counts" || argument == "--boid-counts") {
             options.boid_counts = parse_positive_counts(argv[index]);
         } else {

@@ -47,6 +47,7 @@ void run_scenario(
     auto parameters = flock3d::bench::parameters_for_model(model, boid_count, 12'345U + boid_count);
     apply_neighbor_mode(parameters, neighbor_mode);
     parameters.thread_count = thread_count;
+    parameters.thread_chunk_size = options.thread_chunk_size;
     flock3d::sim::BoidSimulation simulation{parameters};
     const std::size_t warmup_ticks = flock3d::bench::simulated_seconds_to_ticks(options.warmup_seconds);
     for (std::size_t tick = 0; tick < warmup_ticks; ++tick) {
@@ -83,10 +84,22 @@ void run_scenario(
             ? single_thread_sample_means[static_cast<std::size_t>(sample_index)]
             : stats.mean_ms();
         const double speedup = stats.mean_ms() > 0.0 ? single_thread_mean / stats.mean_ms() : 0.0;
+        const std::uint32_t effective_workers = simulation.effective_thread_count();
+        const std::size_t base_boids_per_worker = effective_workers > 0U ? boid_count / effective_workers : boid_count;
+        const std::size_t remainder_boids = effective_workers > 0U ? boid_count % effective_workers : 0U;
+        const double boids_per_worker_mean = effective_workers > 0U
+            ? static_cast<double>(boid_count) / static_cast<double>(effective_workers)
+            : 0.0;
+        const std::size_t boids_per_worker_min = effective_workers > 0U ? base_boids_per_worker : 0U;
+        const std::size_t boids_per_worker_max = effective_workers > 0U
+            ? base_boids_per_worker + (remainder_boids > 0U ? 1U : 0U)
+            : 0U;
         std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << neighbor_mode.name << ',' << boid_count
-                  << ',' << thread_count << ',' << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
+                  << ',' << thread_count << ',' << effective_workers << ',' << boids_per_worker_mean << ','
+                  << boids_per_worker_min << ',' << boids_per_worker_max << ',' << parameters.thread_chunk_size << ','
+                  << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
                   << ',' << stats.count << ',' << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms
-                  << ',' << speedup << '\n';
+                  << ",,,," << speedup << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -103,10 +116,13 @@ int main(int argc, char** argv)
         NeighborMode{"fixed_radius_uncapped", false, 0U, flock3d::sim::NeighborMode::FixedRadiusUncapped},
         NeighborMode{"fixed_radius_closest_k", false, 32U, flock3d::sim::NeighborMode::FixedRadiusClosestK},
         NeighborMode{"adaptive_radius_closest_k", true, 32U, flock3d::sim::NeighborMode::AdaptiveRadiusClosestK},
+        NeighborMode{"aggregate_social", true, 32U, flock3d::sim::NeighborMode::CellAggregateSocial},
     };
 
-    std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
-                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread\n";
+    std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,"
+                 "boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,"
+                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,"
+                 "integration_parallel_ms,serial_metrics_ms,speedup_vs_single_thread\n";
     for (const auto model : {
              flock3d::sim::SimulationModel::ClassicBoids,
              flock3d::sim::SimulationModel::BirdFlight,

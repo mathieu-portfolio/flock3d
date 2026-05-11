@@ -936,3 +936,77 @@ TEST_CASE("BoidSimulation threaded updates match deterministic serial trajectory
     REQUIRE(serial.positions().size() == threaded.positions().size());
     CHECK(trajectory_distance(serial, threaded) == Catch::Approx(0.0).margin(0.0));
 }
+
+TEST_CASE("BoidSimulation thread count policy keeps serial and automatic paths distinct", "[simulation][threads]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::ClassicBoids).simulation_parameters;
+
+    parameters.boid_count = 511U;
+    parameters.thread_count = 0U;
+    flock3d::sim::BoidSimulation small_auto{parameters};
+    CHECK(small_auto.effective_thread_count() == 1U);
+
+    parameters.boid_count = 512U;
+    flock3d::sim::BoidSimulation medium_auto{parameters};
+    CHECK(medium_auto.effective_thread_count() == 2U);
+
+    parameters.boid_count = 1024U;
+    flock3d::sim::BoidSimulation large_auto{parameters};
+    CHECK(large_auto.effective_thread_count() == 4U);
+
+    parameters.thread_count = 1U;
+    flock3d::sim::BoidSimulation serial{parameters};
+    CHECK(serial.effective_thread_count() == 1U);
+
+    parameters.thread_count = 8U;
+    flock3d::sim::BoidSimulation manual{parameters};
+    CHECK(manual.effective_thread_count() == 8U);
+}
+
+TEST_CASE("BoidSimulation threaded updates preserve boids and finite state", "[simulation][threads]")
+{
+    auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::ClassicBoids).simulation_parameters;
+    parameters.boid_count = 128U;
+    parameters.thread_count = 4U;
+    parameters.thread_chunk_size = 17U;
+
+    flock3d::sim::BoidSimulation simulation{parameters};
+    simulation.update(1.0F / 120.0F);
+
+    REQUIRE(simulation.positions().size() == 128U);
+    REQUIRE(simulation.velocities().size() == 128U);
+    for (std::size_t i = 0; i < simulation.positions().size(); ++i) {
+        const Vector3 position = simulation.positions()[i];
+        const Vector3 velocity = simulation.velocities()[i];
+        CHECK(std::isfinite(position.x));
+        CHECK(std::isfinite(position.y));
+        CHECK(std::isfinite(position.z));
+        CHECK(std::isfinite(velocity.x));
+        CHECK(std::isfinite(velocity.y));
+        CHECK(std::isfinite(velocity.z));
+    }
+}
+
+TEST_CASE("BoidSimulation threaded and serial updates are deterministic", "[simulation][threads]")
+{
+    auto serial_parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::ClassicBoids).simulation_parameters;
+    serial_parameters.boid_count = 96U;
+    serial_parameters.random_seed = 2026U;
+    serial_parameters.thread_count = 1U;
+
+    auto threaded_parameters = serial_parameters;
+    threaded_parameters.thread_count = 4U;
+    threaded_parameters.thread_chunk_size = 11U;
+
+    flock3d::sim::BoidSimulation serial{serial_parameters};
+    flock3d::sim::BoidSimulation threaded{threaded_parameters};
+
+    for (int step = 0; step < 12; ++step) {
+        serial.update(1.0F / 120.0F);
+        threaded.update(1.0F / 120.0F);
+    }
+
+    REQUIRE(serial.positions().size() == threaded.positions().size());
+    REQUIRE(serial.velocities().size() == threaded.velocities().size());
+    CHECK(trajectory_distance(serial, threaded) == Catch::Approx(0.0).margin(0.000001));
+}

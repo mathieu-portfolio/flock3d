@@ -2,9 +2,15 @@
 
 These benchmark executables are for performance diagnosis before optimization. They are intentionally separate from the experiment runner and scientific CSV exports: experiments answer behavior questions, while benchmarks show where single-threaded time is spent.
 
-## Why the benchmark sizes are small
+## CPU thread-scaling focus
 
-Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks therefore use boid counts below 512 by default (`64`, `128`, `256`, and `384`). This keeps runs practical while still making time-series slowdown visible.
+Current threaded measurements show useful scaling only up to a conservative number of workers: 2 threads can help around 512 boids, 4 threads is the best default from roughly 1024 through 10k boids, and 8/16 threads are not default yet because they have remained slower than 4 on recent runs. The shrinking gap at larger boid counts suggests fixed scheduling overhead matters less as flocks grow, while memory/cache bandwidth, spatial-hash access locality, false sharing, or serial bookkeeping may become the next bottleneck. GPU work remains out of scope until the CPU path has enough diagnostics to show whether thread scheduling, load imbalance, cache contention, serial metrics, or bandwidth is limiting scaling.
+
+The simulation update path now uses a reusable CPU executor for threaded updates instead of creating worker threads every update, reuses per-worker scratch buffers for neighbor candidates and aggregate-cell work, and keeps `thread_count=1` on the serial path. `thread_count=0` selects a conservative automatic policy based on current benchmark evidence: fewer than 512 boids uses 1 thread, around 512 boids uses 2 threads, and 1024 or more boids uses 4 threads, capped at 4 for now. Manual thread counts are still respected for benchmark investigations.
+
+## Benchmark sizes
+
+Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused simulation-update benchmark therefore covers the scaling sizes used in recent thread studies by default (`512`, `1024`, `2048`, `5096`, and `10192`). Shorten `--duration` or pass smaller `--counts` for quick local smoke runs.
 
 Focused benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. CSV output therefore makes simulated time (`elapsed_seconds`/`simulated_seconds` and `simulated_ticks`) separate from measured CPU time (`sample_wall_seconds`/`total_wall_seconds`). Prefer the benchmark-specific primary timing column (`mean_update_ms`, `mean_ns_per_tick`, or `mean_spatial_query_ns_per_tick`) when comparing runs; legacy millisecond columns remain where they make the compact CSV easier to read. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
 
@@ -34,8 +40,9 @@ The focused benchmarks accept the same lightweight simulated-time options:
 --duration seconds   # simulated duration per scenario, default 20
 --sample seconds     # simulated CSV sample window length, default 5
 --warmup seconds     # simulated warm-up per scenario, default 1
---threads 1,2,4      # comma-separated CPU worker counts, default 1,2,4 plus hardware_concurrency when available
---counts 64,128      # comma-separated boid counts for focused benchmarks, default 64,128,256,384
+--threads 1,2,4      # comma-separated CPU worker counts, default 1,2,4,8,16 plus hardware_concurrency when available
+--counts 512,1024    # comma-separated boid counts, simulation_update defaults to 512,1024,2048,5096,10192
+--chunk-size boids   # optional deterministic dynamic chunk size; 0 keeps one contiguous range per worker
 ```
 
 CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal.
@@ -159,13 +166,12 @@ Neighbor modes:
 - `fixed_radius_uncapped`
 - `fixed_radius_closest_k`
 - `adaptive_radius_closest_k`
-
-The aggregate-social mode is intentionally measured by `flock3d_aggregate_social_benchmark` so this general timing CSV stays compact.
+- `aggregate_social`
 
 Columns:
 
 ```text
-scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread
+scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,integration_parallel_ms,serial_metrics_ms,speedup_vs_single_thread
 ```
 
 Run it when you want a compact model/mode timing comparison:
@@ -180,7 +186,13 @@ For a quick local comparison while tuning neighbor parameters, shorten the run:
 scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update -- --threads 1,2,4
 ```
 
-Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, and `speedup_vs_single_thread` across worker counts. Exact speedup varies by CPU core count, operating-system scheduler, flock size, and neighbor mode; small boid counts can show little or negative scaling because worker startup overhead is still included in the timed update.
+Run the default scaling comparison for the currently tracked CPU sizes and modes:
+
+```bash
+scripts/run_benchmark.sh simulation_update -- --threads 1,2,4,8,16 --counts 512,1024,2048,5096,10192
+```
+
+Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, `worker_count_effective`, `boids_per_worker_*`, and `speedup_vs_single_thread` across worker counts. Empty `update_parallel_ms`, `integration_parallel_ms`, and `serial_metrics_ms` cells mean the benchmark timed the full update as a single unit for minimum measurement overhead. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if `boids_per_worker_min/max` are balanced but speedup flattens or regresses as worker count rises, suspect memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases rather than simple range imbalance.
 
 
 
