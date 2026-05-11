@@ -45,7 +45,7 @@ The focused benchmarks accept the same lightweight simulated-time options:
 --chunk-size boids   # optional deterministic dynamic chunk size; 0 keeps one contiguous range per worker
 ```
 
-CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal.
+CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal. If you are running from an IDE, task runner, CI log, or another captured output pane where stderr is not detected as a terminal, set `FLOCK3D_BENCHMARK_PROGRESS=always` to force the progress bar; use `FLOCK3D_BENCHMARK_PROGRESS=never` to silence it.
 
 Example progress display:
 
