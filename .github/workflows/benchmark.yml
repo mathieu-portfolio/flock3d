@@ -25,6 +25,12 @@ on:
       scenario:
         description: Optional exact CSV scenario filter; leave blank or use all to keep every row
         required: false
+      models:
+        description: Optional comma-separated simulation model filters for focused benchmarks
+        required: false
+      modes:
+        description: Optional comma-separated benchmark mode filters for focused benchmarks
+        required: false
       duration_seconds:
         description: Optional simulated measured duration in seconds
         required: false
@@ -37,6 +43,71 @@ on:
       repetitions:
         description: Optional repetitions for simulation_ticks
         required: false
+      tick_dt:
+        description: Optional fixed tick delta time in seconds for simulation_ticks
+        required: false
+      tick_rate:
+        description: Optional fixed tick rate in Hz for simulation_ticks
+        required: false
+      seed:
+        description: Optional random seed override
+        required: false
+      chunk_size:
+        description: Optional deterministic worker chunk size in boids for focused benchmarks
+        required: false
+      diagnostics:
+        description: Optional diagnostics/profile level for focused benchmarks
+        required: false
+        type: choice
+        default: none
+        options:
+          - none
+          - phases
+          - workers
+          - full
+      hardware_threads:
+        description: Append this runner's hardware thread count to focused benchmark thread counts
+        required: false
+        type: boolean
+        default: false
+      full_matrix:
+        description: Use focused benchmark broad default count/thread/duration matrix
+        required: false
+        type: boolean
+        default: false
+      world_size:
+        description: Optional world half-extent override for focused benchmarks
+        required: false
+      neighbor_radius:
+        description: Optional metric neighbor radius override for focused benchmarks
+        required: false
+      perception_radius:
+        description: Optional perception radius override for focused benchmarks
+        required: false
+      separation_radius:
+        description: Optional separation radius override for focused benchmarks
+        required: false
+      max_speed:
+        description: Optional max speed override for focused benchmarks
+        required: false
+      max_force:
+        description: Optional max force override for focused benchmarks
+        required: false
+      max_selected_neighbors:
+        description: Optional max selected neighbors override for focused benchmarks
+        required: false
+      target_neighbor_count:
+        description: Optional adaptive target neighbor count override for focused benchmarks
+        required: false
+      adaptive_perception:
+        description: Optional adaptive perception override for focused benchmarks
+        required: false
+        type: choice
+        default: unchanged
+        options:
+          - unchanged
+          - on
+          - off
       runner_label:
         description: Optional runner label, e.g. ubuntu-latest or self-hosted
         required: false
@@ -55,10 +126,28 @@ jobs:
       BOID_COUNTS: ${{ inputs.boid_counts }}
       THREAD_COUNTS: ${{ inputs.thread_counts }}
       SCENARIO: ${{ inputs.scenario }}
+      BENCHMARK_MODELS: ${{ inputs.models }}
+      BENCHMARK_MODES: ${{ inputs.modes }}
       DURATION_SECONDS: ${{ inputs.duration_seconds }}
       SAMPLE_SECONDS: ${{ inputs.sample_seconds }}
       WARMUP_SECONDS: ${{ inputs.warmup_seconds }}
       REPETITIONS: ${{ inputs.repetitions }}
+      TICK_DT: ${{ inputs.tick_dt }}
+      TICK_RATE: ${{ inputs.tick_rate }}
+      BENCHMARK_SEED: ${{ inputs.seed }}
+      CHUNK_SIZE: ${{ inputs.chunk_size }}
+      DIAGNOSTICS: ${{ inputs.diagnostics || 'none' }}
+      HARDWARE_THREADS: ${{ inputs.hardware_threads || false }}
+      FULL_MATRIX: ${{ inputs.full_matrix || false }}
+      WORLD_SIZE: ${{ inputs.world_size }}
+      NEIGHBOR_RADIUS: ${{ inputs.neighbor_radius }}
+      PERCEPTION_RADIUS: ${{ inputs.perception_radius }}
+      SEPARATION_RADIUS: ${{ inputs.separation_radius }}
+      MAX_SPEED: ${{ inputs.max_speed }}
+      MAX_FORCE: ${{ inputs.max_force }}
+      MAX_SELECTED_NEIGHBORS: ${{ inputs.max_selected_neighbors }}
+      TARGET_NEIGHBOR_COUNT: ${{ inputs.target_neighbor_count }}
+      ADAPTIVE_PERCEPTION: ${{ inputs.adaptive_perception || 'unchanged' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,6 +176,11 @@ jobs:
           echo "boid_counts=${BOID_COUNTS}"
           echo "thread_counts=${THREAD_COUNTS}"
           echo "scenario_filter=${SCENARIO}"
+          echo "models=${BENCHMARK_MODELS}"
+          echo "modes=${BENCHMARK_MODES}"
+          echo "diagnostics=${DIAGNOSTICS}"
+          echo "hardware_threads=${HARDWARE_THREADS}"
+          echo "full_matrix=${FULL_MATRIX}"
           echo "preset=${FLOCK3D_BENCHMARK_PRESET} (CMAKE_BUILD_TYPE=Release)"
 
           common_args=()
@@ -99,7 +193,26 @@ jobs:
           [[ -n "${BOID_COUNTS}" ]] && common_extra+=(--counts "${BOID_COUNTS}")
           [[ -n "${BOID_COUNTS}" ]] && ticks_extra+=(--counts "${BOID_COUNTS}")
           [[ -n "${THREAD_COUNTS}" ]] && common_extra+=(--threads "${THREAD_COUNTS}")
+          [[ -n "${BENCHMARK_MODELS}" ]] && common_extra+=(--models "${BENCHMARK_MODELS}")
+          [[ -n "${BENCHMARK_MODES}" ]] && common_extra+=(--modes "${BENCHMARK_MODES}")
+          [[ -n "${BENCHMARK_SEED}" ]] && common_extra+=(--seed "${BENCHMARK_SEED}")
+          [[ -n "${BENCHMARK_SEED}" ]] && ticks_extra+=(--seed "${BENCHMARK_SEED}")
+          [[ -n "${CHUNK_SIZE}" ]] && common_extra+=(--chunk-size "${CHUNK_SIZE}")
+          [[ "${DIAGNOSTICS}" != "" && "${DIAGNOSTICS}" != "none" ]] && common_extra+=(--diagnostics "${DIAGNOSTICS}")
+          [[ "${HARDWARE_THREADS}" == "true" ]] && common_extra+=(--hardware-threads)
+          [[ "${FULL_MATRIX}" == "true" ]] && common_extra+=(--full-matrix)
+          [[ -n "${WORLD_SIZE}" ]] && common_extra+=(--world-size "${WORLD_SIZE}")
+          [[ -n "${NEIGHBOR_RADIUS}" ]] && common_extra+=(--neighbor-radius "${NEIGHBOR_RADIUS}")
+          [[ -n "${PERCEPTION_RADIUS}" ]] && common_extra+=(--perception-radius "${PERCEPTION_RADIUS}")
+          [[ -n "${SEPARATION_RADIUS}" ]] && common_extra+=(--separation-radius "${SEPARATION_RADIUS}")
+          [[ -n "${MAX_SPEED}" ]] && common_extra+=(--max-speed "${MAX_SPEED}")
+          [[ -n "${MAX_FORCE}" ]] && common_extra+=(--max-force "${MAX_FORCE}")
+          [[ -n "${MAX_SELECTED_NEIGHBORS}" ]] && common_extra+=(--max-selected-neighbors "${MAX_SELECTED_NEIGHBORS}")
+          [[ -n "${TARGET_NEIGHBOR_COUNT}" ]] && common_extra+=(--target-neighbor-count "${TARGET_NEIGHBOR_COUNT}")
+          [[ "${ADAPTIVE_PERCEPTION}" != "" && "${ADAPTIVE_PERCEPTION}" != "unchanged" ]] && common_extra+=(--adaptive-perception "${ADAPTIVE_PERCEPTION}")
           [[ -n "${REPETITIONS}" ]] && ticks_extra+=(--repetitions "${REPETITIONS}")
+          [[ -n "${TICK_DT}" ]] && ticks_extra+=(--dt "${TICK_DT}")
+          [[ -n "${TICK_RATE}" ]] && ticks_extra+=(--tick-rate "${TICK_RATE}")
 
           run_common() {
             local name="$1"
