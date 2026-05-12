@@ -54,6 +54,13 @@ struct ParameterOverrides {
     std::optional<bool> adaptive_perception_enabled{};
 };
 
+enum class DiagnosticsLevel {
+    None,
+    Phases,
+    Workers,
+    Full,
+};
+
 struct BenchmarkOptions {
     double duration_seconds{default_duration_seconds};
     double sample_seconds{default_sample_seconds};
@@ -65,6 +72,7 @@ struct BenchmarkOptions {
     std::vector<std::string> model_filters{};
     std::vector<std::string> mode_filters{};
     ParameterOverrides parameter_overrides{};
+    DiagnosticsLevel diagnostics_level{DiagnosticsLevel::None};
     bool full_matrix{false};
     bool hardware_threads{false};
 };
@@ -193,6 +201,39 @@ inline void append_hardware_thread_count(std::vector<std::uint32_t>& thread_coun
         }
     }
     return value;
+}
+
+[[nodiscard]] inline std::optional<DiagnosticsLevel> parse_diagnostics_level(std::string_view text) noexcept
+{
+    const std::string value = lowercase_copy(text);
+    if (value == "none" || value == "basic" || value == "compact") {
+        return DiagnosticsLevel::None;
+    }
+    if (value == "phases") {
+        return DiagnosticsLevel::Phases;
+    }
+    if (value == "workers") {
+        return DiagnosticsLevel::Workers;
+    }
+    if (value == "full") {
+        return DiagnosticsLevel::Full;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] inline bool includes_phase_diagnostics(DiagnosticsLevel level) noexcept
+{
+    return level == DiagnosticsLevel::Phases || level == DiagnosticsLevel::Full;
+}
+
+[[nodiscard]] inline bool includes_worker_diagnostics(DiagnosticsLevel level) noexcept
+{
+    return level == DiagnosticsLevel::Workers || level == DiagnosticsLevel::Full;
+}
+
+[[nodiscard]] inline bool includes_internal_diagnostics(DiagnosticsLevel level) noexcept
+{
+    return level == DiagnosticsLevel::Full;
 }
 
 [[nodiscard]] inline std::optional<bool> parse_bool(std::string_view text) noexcept
@@ -351,10 +392,12 @@ inline void print_usage(std::string_view executable)
               << " [--models ClassicBoids,BirdFlight] [--modes fixed_radius_uncapped,adaptive_radius_closest_k]"
               << " [--counts 512,1024] [--threads 1,2,4] [--hardware-threads] [--full-matrix]"
               << " [--duration seconds] [--sample seconds] [--warmup seconds] [--seed value] [--chunk-size boids]"
+              << " [--diagnostics none|phases|workers|full] [--profile-level none|phases|workers|full]"
               << " [--world-size half-extent] [--neighbor-radius radius] [--perception-radius radius]"
               << " [--separation-radius radius] [--max-speed speed] [--max-force force]"
               << " [--max-selected-neighbors count] [--target-neighbor-count count] [--adaptive-perception on|off]\n"
-              << "CSV is printed to stdout. Benchmarks advance simulated time as fast as possible; progress is printed to stderr only when stderr is a terminal."
+              << "CSV is printed to stdout. Default CSVs stay compact; pass --diagnostics to append investigation-only columns."
+              << " Benchmarks advance simulated time as fast as possible; progress is printed to stderr only when stderr is a terminal."
               << " Comma-separated lists are accepted for models, modes, counts, and threads.\n";
 }
 
@@ -442,6 +485,12 @@ inline BenchmarkOptions parse_options(int argc, char** argv)
             if (options.mode_filters.empty()) {
                 fail_usage(argv[0], "--modes must name at least one mode");
             }
+        } else if (argument == "--diagnostics" || argument == "--profile-level") {
+            const auto value = parse_diagnostics_level(require_value(argc, argv, index, argument));
+            if (!value.has_value()) {
+                fail_usage(argv[0], "--diagnostics must be one of none, phases, workers, or full");
+            }
+            options.diagnostics_level = *value;
         } else if (argument == "--seed") {
             const auto value = parse_u32(require_value(argc, argv, index, argument));
             if (!value.has_value()) {

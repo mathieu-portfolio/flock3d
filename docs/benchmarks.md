@@ -47,6 +47,8 @@ The focused benchmarks accept the same lightweight simulated-time and filtering 
 --warmup seconds                    # simulated warm-up per scenario; default 0.25
 --seed integer                      # random seed override for each fresh simulation
 --chunk-size boids                  # optional deterministic dynamic chunk size; 0 keeps one contiguous range per worker
+--diagnostics none|phases|workers|full # opt in to detailed benchmark diagnostics; default none
+--profile-level none|phases|workers|full # alias for --diagnostics
 --full-matrix                       # restore the older broad duration/sample/warmup/count/thread defaults
 ```
 
@@ -65,6 +67,14 @@ Common simulation-parameter overrides are also available when they map directly 
 ```
 
 Invalid list entries, booleans, model names, or mode names print usage and fail instead of silently changing the run matrix.
+
+## Compact CSVs vs diagnostics
+
+Default benchmark CSVs are intentionally compact and stable. Use them for trend comparison in CI, release-to-release checks, and quick local regressions: the default columns identify the scenario/model/mode, boid count, requested thread count, sample window, mean/min/max update cost, speedup versus the matching single-thread sample, and the benchmark-specific workload knobs that make rows comparable.
+
+Detailed diagnostics are opt-in because timing phases, worker summaries, and internal steering counters make CSVs wide and can add instrumentation work. Pass `--diagnostics phases` to append update phase timings such as `rebuild_spatial_hash_ms`, `model_update_ms`, `integration_ms`, and `metrics_ms`; pass `--diagnostics workers` to append worker/load-balance summaries such as `worker_count_effective`, `boids_per_worker_*`, `parallel_workspace_ms`, `parallel_dispatch_ms`, and `parallel_for_calls_mean`; pass `--diagnostics full` to include both categories plus benchmark-specific internals such as aggregate-social counters. `--profile-level` is accepted as an alias when that wording better matches your workflow.
+
+Diagnostics mode is for investigation after a compact trend run shows an unexpected change. For low-level CPU, cache, branch, allocator, or bandwidth analysis, use an external profiler such as `perf`, Instruments, VTune, Tracy, or platform-native sampling tools; benchmark diagnostics are coarse attribution columns, not a substitute for hardware-counter or call-stack profiling.
 
 CSV is printed to stdout so output is easy to redirect. Progress bars are printed to stderr and are automatically disabled unless stderr is a terminal, so the helper script can redirect stdout to CSV files while still showing simulated-time progress in your terminal. If you are running from an IDE, task runner, CI log, or another captured output pane where stderr is not detected as a terminal, set `FLOCK3D_BENCHMARK_PROGRESS=always` to force the progress bar; use `FLOCK3D_BENCHMARK_PROGRESS=never` to silence it.
 
@@ -214,11 +224,13 @@ Neighbor modes:
 - `adaptive_radius_closest_k`
 - `aggregate_social`
 
-Columns:
+Default columns:
 
 ```text
-scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,integration_parallel_ms,serial_metrics_ms,rebuild_spatial_hash_ms,model_update_ms,integration_ms,metrics_ms,instrumented_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
+scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
 ```
+
+Opt-in diagnostics append phase columns with `--diagnostics phases`, worker/load-balance columns with `--diagnostics workers`, or both with `--diagnostics full`.
 
 Run it when you want a compact model/mode timing comparison:
 
@@ -238,7 +250,7 @@ Run a scaling comparison for the currently tracked CPU sizes and modes by making
 scripts/run_benchmark.sh simulation_update -- --models ClassicBoids,BirdFlight,FishSchool,NoiseExperiment --modes fixed_radius_uncapped,fixed_radius_closest_k,adaptive_radius_closest_k,aggregate_social --threads 1,2,4,8,16 --counts 512,1024,2048,5096,10192
 ```
 
-Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, `worker_count_effective`, `boids_per_worker_*`, and `speedup_vs_single_thread` across worker counts. The phase columns now break the full measured update into rebuild (`rebuild_spatial_hash_ms`), model/steering work excluding integration (`update_parallel_ms`/`model_update_ms`), integration (`integration_parallel_ms`/`integration_ms`), metrics bookkeeping (`serial_metrics_ms`/`metrics_ms`), and the internally instrumented total (`instrumented_update_ms`). `mean_update_ms` is still the outer wall-clock timing used for speedup, while the instrumented total helps attribute where time is spent. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if `boids_per_worker_min/max` are balanced but speedup flattens or regresses as worker count rises, suspect memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases rather than simple range imbalance.
+Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, and `speedup_vs_single_thread` across worker counts in the default CSV. When a trend changes unexpectedly, rerun with `--diagnostics phases` to break the full measured update into rebuild (`rebuild_spatial_hash_ms`), model/steering work excluding integration (`update_parallel_ms`/`model_update_ms`), integration (`integration_parallel_ms`/`integration_ms`), metrics bookkeeping (`serial_metrics_ms`/`metrics_ms`), and the internally instrumented total (`instrumented_update_ms`). Rerun with `--diagnostics workers` to add `worker_count_effective`, `boids_per_worker_*`, `parallel_workspace_ms`, `parallel_dispatch_ms`, and parallel-for call summaries. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if worker balance looks good but speedup flattens or regresses as worker count rises, use an external profiler to confirm memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases.
 
 
 
@@ -253,11 +265,13 @@ Compared modes:
 - `cell_aggregate_social_adaptive_radius`
 - `cell_aggregate_social_fov_adaptive_radius`
 
-Columns:
+Default columns:
 
 ```text
-scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,aggregate_social_enabled,social_fov_enabled,adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,social_weight_sum_mean,flock_spread,polarization,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
+scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,social_fov_enabled,adaptive_social_radius_enabled
 ```
+
+Use `--diagnostics workers` to append the effective worker count. Use `--diagnostics full` when investigating aggregate-social internals such as visible/rejected aggregate cells, exact separation neighbors, social weight sums, flock spread, polarization, and the metrics-update timing collected on the separate diagnostic simulation.
 
 Run it when tuning aggregate social visibility or adaptive-radius behavior:
 
