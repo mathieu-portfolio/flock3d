@@ -37,31 +37,7 @@ constexpr AggregateSocialVariant all_variants[] = {
 
 std::vector<flock3d::sim::SimulationModel> selected_models(const BenchmarkOptions& options)
 {
-    if (options.model_filters.empty()) {
-        if (options.full_matrix) {
-            return {
-                flock3d::sim::SimulationModel::ClassicBoids,
-                flock3d::sim::SimulationModel::BirdFlight,
-                flock3d::sim::SimulationModel::FishSchool,
-                flock3d::sim::SimulationModel::NoiseExperiment,
-            };
-        }
-        return {flock3d::sim::SimulationModel::ClassicBoids};
-    }
-
-    std::vector<flock3d::sim::SimulationModel> models;
-    for (const std::string& filter : options.model_filters) {
-        const auto model = flock3d::bench::parse_model_name(filter);
-        if (!model.has_value()) {
-            std::cerr << "Unknown model '" << filter << "'. Known models: ClassicBoids, BirdFlight, FishSchool, NoiseExperiment\n";
-            flock3d::bench::print_usage("flock3d_aggregate_social_benchmark");
-            std::exit(EXIT_FAILURE);
-        }
-        if (std::find(models.begin(), models.end(), *model) == models.end()) {
-            models.push_back(*model);
-        }
-    }
-    return models;
+    return flock3d::bench::selected_models_or_exit(options, "flock3d_aggregate_social_benchmark");
 }
 
 std::vector<AggregateSocialVariant> selected_variants(const BenchmarkOptions& options)
