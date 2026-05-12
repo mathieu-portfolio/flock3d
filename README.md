@@ -93,8 +93,7 @@ For presets, sweeps, export modes, and plotting details, see [docs/experiments.m
 
 ## Benchmarks
 
-Focused performance benchmarks live in [docs/benchmarks.md](docs/benchmarks.md). Run `./scripts/run_benchmark.sh` to build the release benchmark targets and write CSV outputs under `outputs/benchmarks/`; add `--summary`/`--plot` or run `./scripts/summarize_benchmarks.py` and `./scripts/plot_benchmarks.sh` to create latest-sample summaries, scaling plots, and elapsed-time timing plots. The underlying executables still print CSV to stdout and keep progress output separate from data. They intentionally use fewer than 512 boids so clustering-driven slowdown can be observed before adding optimizations or parallelism.
-
+Focused performance benchmarks live in [docs/benchmarks.md](docs/benchmarks.md). Run `./scripts/run_benchmark.sh` to build release benchmark targets and write CSV files under `outputs/benchmarks/`; add `--summary` or `--plot` to generate summaries and plots from the same run. The executables keep CSV on stdout and progress on stderr so scripted output stays machine-readable. Compact defaults are intended for quick local iteration; pass explicit counts, threads, or `--full-matrix` when collecting comparison data.
 
 ## GitHub Actions workflows
 

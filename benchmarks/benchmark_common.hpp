@@ -350,6 +350,41 @@ inline std::string_view model_name(flock3d::sim::SimulationModel model) noexcept
     return models;
 }
 
+inline void print_usage(std::string_view executable);
+
+[[nodiscard]] inline std::vector<flock3d::sim::SimulationModel> selected_models_or_exit(
+    const BenchmarkOptions& options,
+    const char* executable_name)
+{
+    using flock3d::sim::SimulationModel;
+    if (options.model_filters.empty()) {
+        if (options.full_matrix) {
+            return {
+                SimulationModel::ClassicBoids,
+                SimulationModel::BirdFlight,
+                SimulationModel::FishSchool,
+                SimulationModel::NoiseExperiment,
+            };
+        }
+        return {SimulationModel::ClassicBoids};
+    }
+
+    std::vector<SimulationModel> models;
+    for (const std::string& filter : options.model_filters) {
+        const auto model = parse_model_name(filter);
+        if (!model.has_value()) {
+            std::cerr << "Unknown model '" << filter
+                      << "'. Known models: ClassicBoids, BirdFlight, FishSchool, NoiseExperiment\n";
+            print_usage(executable_name);
+            std::exit(EXIT_FAILURE);
+        }
+        if (std::find(models.begin(), models.end(), *model) == models.end()) {
+            models.push_back(*model);
+        }
+    }
+    return models;
+}
+
 struct UpdateStats {
     std::size_t count{};
     double total_ms{};
