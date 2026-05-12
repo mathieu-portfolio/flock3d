@@ -1,6 +1,6 @@
 # Benchmarking flock3d
 
-These benchmark executables are for performance diagnosis before optimization. They are intentionally separate from the experiment runner and scientific CSV exports: experiments answer behavior questions, while benchmarks show where update time is spent.
+These benchmark executables are for performance diagnosis before optimization. They are intentionally separate from the experiment runner and scientific CSV exports: experiments answer behavior questions, while benchmarks show where update or render time is spent.
 
 ## CPU worker policy and benchmark size
 
@@ -8,7 +8,7 @@ These benchmark executables are for performance diagnosis before optimization. T
 
 Default benchmark runs are compact for local iteration: 512 boids, requested thread counts `0,1,2,4,8`, one simulated second, and a short warm-up. Pass explicit `--counts`, `--threads`, `--duration`, and `--sample` values for focused comparisons, or `--full-matrix` to restore the broader historical matrix. Hardware concurrency is not added automatically; pass `--hardware-threads` when you want to include this machine's `std::thread::hardware_concurrency()` value.
 
-Benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows and emit one CSV row per simulated-time sample window. Compare benchmark-specific timing columns such as `mean_update_ms`, `mean_ns_per_tick`, or `mean_spatial_query_ns_per_tick`; simulated time columns (`elapsed_seconds`, `simulated_seconds`, `simulated_ticks`) describe workload progress, while wall/CPU timing columns describe cost. Sampling multiple windows can reveal clustering-driven slowdowns in spatial queries, neighbor filtering, metrics, model logic, or deterministic noise.
+Benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows and emit one CSV row per simulated-time sample window. Compare benchmark-specific timing columns such as `mean_update_ms`, `mean_ns_per_tick`, or `mean_spatial_query_ns_per_tick`; simulated time columns (`elapsed_seconds`, `simulated_seconds`, `simulated_ticks`) describe simulation workload progress, render sample columns (`sample_index`, `frames_in_sample`) describe rendered-frame progress, and wall/CPU timing columns describe cost. Sampling multiple windows can reveal clustering-driven slowdowns in spatial queries, neighbor filtering, metrics, model logic, or deterministic noise.
 
 ## Build
 
@@ -39,7 +39,7 @@ The focused benchmarks accept the same lightweight simulated-time and filtering 
 --threads 0,1,2,4,8                 # comma-separated requested CPU worker counts; 0 means automatic; default 0,1,2,4,8
 --hardware-threads                  # append std::thread::hardware_concurrency() explicitly
 --duration seconds                  # simulated duration per scenario; default 1
---sample seconds                    # simulated CSV sample window length; default 1
+--sample seconds                    # simulated or render CSV sample window length; default depends on target
 --warmup seconds                    # simulated warm-up per scenario; default 0.25
 --seed integer                      # random seed override for each fresh simulation
 --chunk-size boids                  # optional deterministic dynamic chunk size; 0 keeps one contiguous range per worker
@@ -189,6 +189,9 @@ mkdir -p outputs/benchmarks
 
 ./build/release/bin/flock3d_aggregate_social_benchmark \
   > outputs/benchmarks/aggregate_social.csv
+
+./build/release/bin/flock3d_render_benchmark \
+  > outputs/benchmarks/render.csv
 ```
 
 ## Which benchmark should I run?
@@ -199,6 +202,7 @@ mkdir -p outputs/benchmarks
 - Use `metrics` for the cost of collecting `SimulationMetrics`.
 - Use `noise` for deterministic noise-mode overhead.
 - Use `simulation_ticks` for compact fixed-tick throughput summaries over larger counts.
+- Use `render` for isolated raylib rendering cost on frozen boid states at large visible boid counts.
 
 ## Benchmark targets
 
@@ -307,6 +311,39 @@ scripts/run_benchmark.sh simulation_ticks -- --counts 128,256 --warmup 0.5 --mea
 ```
 
 The legacy `--duration` option is accepted as an alias for `--measured` when forwarded by `scripts/run_benchmark.sh`; `--sample` is accepted and ignored because this benchmark emits compact one-row summaries per repetition rather than time-series sample windows.
+
+### `flock3d_render_benchmark`
+
+Purpose: isolate the current raylib rendering path from simulation update work so large-boid-count decisions can be based on evidence. The benchmark creates deterministic frozen ClassicBoids states, renders them repeatedly with a fixed camera, disables the metrics/debug overlay, and never calls `BoidSimulation::update` inside the measured loop. Use it when the question is “can the current per-boid triangle rendering path stay within the frame budget before we optimize simulation further?”
+
+Defaults:
+
+- boid counts: `1,000`, `5,000`, `10,000`
+- measured frames per count: `180`
+- sample window: `60` frames
+- warm-up: `30` frames
+- deterministic seed: `12345 + boid_count` unless `--seed` is supplied
+
+Columns:
+
+```text
+scenario,boid_count,elapsed_seconds,sample_index,frames_in_sample,mean_render_ms,min_render_ms,max_render_ms,p50_render_ms,p95_render_ms,p99_render_ms,frames_per_second
+```
+
+Run the default render benchmark through the helper script:
+
+```bash
+scripts/run_benchmark.sh render
+```
+
+Run a quick smoke test or choose an explicit count matrix:
+
+```bash
+scripts/run_benchmark.sh render -- --counts 1000,5000,10000 --frames 120 --sample-frames 30 --warmup-frames 10
+scripts/run_benchmark.sh render -- --duration 3 --sample 1 --warmup 0.5
+```
+
+Interpret `mean_render_ms`, `p95_render_ms`, and `p99_render_ms` against the 60 FPS frame budget of approximately `16.67 ms`. Rows comfortably below `16.67 ms` leave time for simulation and application overhead; rows near or above that budget show rendering alone can miss 60 FPS at that boid count. `frames_per_second` is computed from measured render-frame durations for each sample window. This benchmark intentionally does not measure simulation update cost, neighbor search, metrics collection, input handling, or overlay drawing; compare it with `simulation_update` or `simulation_ticks` to decide whether the next optimization should target rendering, simulation, or both.
 
 ### `flock3d_spatial_hash_benchmark`
 

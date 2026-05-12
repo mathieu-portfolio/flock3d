@@ -109,6 +109,14 @@ BENCHMARKS: tuple[BenchmarkSpec, ...] = (
         ),
     ),
     BenchmarkSpec(
+        name="render",
+        filename="render.csv",
+        group_columns=("scenario",),
+        primary_metric="mean_render_ms",
+        time_metrics=("mean_render_ms", "p95_render_ms", "p99_render_ms", "frames_per_second"),
+        scaling_metrics=("mean_render_ms", "p95_render_ms", "p99_render_ms", "frames_per_second"),
+    ),
+    BenchmarkSpec(
         name="simulation_ticks",
         filename="simulation_ticks.csv",
         group_columns=("scenario",),
