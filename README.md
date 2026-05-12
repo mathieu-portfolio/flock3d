@@ -100,7 +100,7 @@ Focused performance benchmarks live in [docs/benchmarks.md](docs/benchmarks.md).
 
 The repository includes lightweight workflows for remote iteration when you are away from a development machine:
 
-- **Benchmarks** (`.github/workflows/benchmark.yml`): a manual `workflow_dispatch` workflow that runs release benchmark builds through `scripts/run_benchmark.sh`, writes CSV/log/summary/plot outputs under `outputs/benchmarks/`, and uploads the directory as an artifact. Inputs let you choose the benchmark, boid counts, thread counts, scenario CSV filter, simulated duration/sample/warm-up windows, repetitions for `simulation_ticks`, and an optional runner label such as `self-hosted`.
+- **Benchmarks** (`.github/workflows/benchmark.yml`): a manual `workflow_dispatch` workflow that runs release benchmark builds through `scripts/run_benchmark.sh`, writes CSV/log/summary/plot outputs under `outputs/benchmarks/`, and uploads the directory as an artifact. Inputs let you choose the benchmark, boid counts, thread counts, scenario CSV filter, simulated duration/sample/warm-up windows, repetitions for `simulation_ticks`, an optional `benchmark_args` string for advanced executable flags, and an optional runner label such as `self-hosted`.
 - **CI Build** (`.github/workflows/ci.yml`): debug configure/build/test coverage using `scripts/build.sh` and `scripts/tests.sh`.
 - **Smoke Benchmarks** (`.github/workflows/smoke.yml`): a quick release benchmark sanity check with tiny counts and short simulated time.
 - **Lint** (`.github/workflows/lint.yml`): shell script, Python script, and CMake preset checks.
@@ -111,8 +111,9 @@ The repository includes lightweight workflows for remote iteration when you are 
 2. Tap **Actions**, then choose **Benchmarks**.
 3. Tap **Run workflow**.
 4. Pick the benchmark and enter small comma-separated values first, for example `boid_counts=64,128`, `thread_counts=1,2`, `duration_seconds=1`, and `sample_seconds=0.25`.
-5. Optionally set `runner_label` to `self-hosted` if you have a faster machine registered as a GitHub Actions runner.
-6. Start the run, wait for it to finish, then open the run summary and download the `flock3d-benchmarks-*` artifact for CSV files, logs, summaries, and generated plots.
+5. For advanced simulation overrides, put executable flags in `benchmark_args`, for example `--world-size 60 --adaptive-perception on`.
+6. Optionally set `runner_label` to `self-hosted` if you have a faster machine registered as a GitHub Actions runner.
+7. Start the run, wait for it to finish, then open the run summary and download the `flock3d-benchmarks-*` artifact for CSV files, logs, summaries, and generated plots.
 
 The manual workflow keeps build details in the existing benchmark script and CI presets; the mobile UI is primarily a remote control for selecting benchmark parameters and retrieving artifacts.
 
