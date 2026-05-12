@@ -1,5 +1,6 @@
 set(flock3d_test_sources
     test_spatial_hash.cpp
+    test_spatial_grid.cpp
     test_simulation.cpp
     test_controls.cpp
     test_experiment.cpp

@@ -37,9 +37,11 @@ Scenarios share a common parameter structure and public simulation interface. Th
 
 Placeholder scenario names reserve future model space without complicating the implemented scenarios.
 
-## Spatial hash
+## Spatial indexing
 
-Neighbor queries use a uniform 3D spatial hash rather than all-pairs checks. Boids are inserted into cells derived from position and queried by nearby cells, which keeps local-interaction scans compact for the flock sizes targeted by the renderer and study scripts.
+Production simulation updates still use the existing uniform 3D `SpatialHash3D` rather than all-pairs checks. Boids are inserted into cells derived from position and queried by nearby cells, which keeps local-interaction scans compact for the flock sizes targeted by the renderer and study scripts.
+
+An experimental `SpatialGrid3D` now lives beside the hash as a sparse sorted grid with contiguous entries, cell ranges, and aggregates. It is not selected by the simulation by default yet; the first phase is equivalence testing and side-by-side benchmarking before any migration decision changes behavior.
 
 ## Deterministic stepping
 
