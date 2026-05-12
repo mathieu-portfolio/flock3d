@@ -157,6 +157,23 @@ TEST_CASE("Common benchmark boolean parser accepts explicit CLI forms", "[benchm
     CHECK_FALSE(flock3d::bench::parse_bool("maybe").has_value());
 }
 
+TEST_CASE("Common benchmark diagnostics parser accepts compact and opt-in levels", "[benchmark][common][options]")
+{
+    REQUIRE(flock3d::bench::parse_diagnostics_level("none").has_value());
+    CHECK(*flock3d::bench::parse_diagnostics_level("none") == flock3d::bench::DiagnosticsLevel::None);
+    CHECK(*flock3d::bench::parse_diagnostics_level("basic") == flock3d::bench::DiagnosticsLevel::None);
+    CHECK(*flock3d::bench::parse_diagnostics_level("phases") == flock3d::bench::DiagnosticsLevel::Phases);
+    CHECK(*flock3d::bench::parse_diagnostics_level("workers") == flock3d::bench::DiagnosticsLevel::Workers);
+    CHECK(*flock3d::bench::parse_diagnostics_level("full") == flock3d::bench::DiagnosticsLevel::Full);
+    CHECK_FALSE(flock3d::bench::parse_diagnostics_level("verbose").has_value());
+
+    CHECK(flock3d::bench::includes_phase_diagnostics(flock3d::bench::DiagnosticsLevel::Phases));
+    CHECK_FALSE(flock3d::bench::includes_phase_diagnostics(flock3d::bench::DiagnosticsLevel::Workers));
+    CHECK(flock3d::bench::includes_worker_diagnostics(flock3d::bench::DiagnosticsLevel::Workers));
+    CHECK_FALSE(flock3d::bench::includes_worker_diagnostics(flock3d::bench::DiagnosticsLevel::Phases));
+    CHECK(flock3d::bench::includes_internal_diagnostics(flock3d::bench::DiagnosticsLevel::Full));
+}
+
 TEST_CASE("Common benchmark model parser validates known model names", "[benchmark][common][options]")
 {
     const auto models = flock3d::bench::parse_model_list("BirdFlight,fish_school");

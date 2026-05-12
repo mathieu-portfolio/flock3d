@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <string_view>
 #include <cstdlib>
 #include <vector>
@@ -162,7 +163,8 @@ void run_scenario(
     std::uint32_t boid_count,
     const BenchmarkOptions& options,
     ProgressBar& progress,
-    std::uint32_t thread_count)
+    std::uint32_t thread_count,
+    std::vector<double>& single_thread_sample_means)
 {
     const std::uint32_t seed = options.seed.value_or(44'000U + boid_count);
     auto parameters = aggregate_social_parameters(model, boid_count, seed, variant);
@@ -170,17 +172,22 @@ void run_scenario(
     parameters.thread_count = thread_count;
     parameters.thread_chunk_size = options.thread_chunk_size;
     flock3d::sim::BoidSimulation simulation{parameters};
+    const bool collect_internal_diagnostics = flock3d::bench::includes_internal_diagnostics(options.diagnostics_level);
     // SimulationMetrics recording is intentionally serial inside BoidSimulation to avoid
     // contended metric writes. Keep diagnostics on a separate simulation so the timed
     // aggregate-social update exercises the requested thread count instead of measuring
     // serial instrumentation plus parallel integration overhead.
-    flock3d::sim::BoidSimulation diagnostic_simulation{parameters};
+    auto diagnostic_simulation = collect_internal_diagnostics
+        ? std::make_unique<flock3d::sim::BoidSimulation>(parameters)
+        : nullptr;
     flock3d::sim::SimulationMetrics metrics{};
 
     const std::size_t warmup_ticks = flock3d::bench::simulated_seconds_to_ticks(options.warmup_seconds);
     for (std::size_t tick = 0; tick < warmup_ticks; ++tick) {
         simulation.update(flock3d::bench::fixed_dt, nullptr);
-        diagnostic_simulation.update(flock3d::bench::fixed_dt, &metrics);
+        if (diagnostic_simulation != nullptr) {
+            diagnostic_simulation->update(flock3d::bench::fixed_dt, &metrics);
+        }
     }
 
     const std::size_t total_ticks = flock3d::bench::simulated_seconds_to_ticks(options.duration_seconds);
@@ -198,12 +205,14 @@ void run_scenario(
             const double milliseconds = flock3d::bench::time_ms([&]() {
                 simulation.update(flock3d::bench::fixed_dt, nullptr);
             });
-            const double metrics_milliseconds = flock3d::bench::time_ms([&]() {
-                diagnostic_simulation.update(flock3d::bench::fixed_dt, &metrics);
-            });
             stats.record(milliseconds);
-            metrics_update_stats.record(metrics_milliseconds);
-            diagnostics.record(metrics);
+            if (diagnostic_simulation != nullptr) {
+                const double metrics_milliseconds = flock3d::bench::time_ms([&]() {
+                    diagnostic_simulation->update(flock3d::bench::fixed_dt, &metrics);
+                });
+                metrics_update_stats.record(metrics_milliseconds);
+                diagnostics.record(metrics);
+            }
             ++completed_ticks;
 
             const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
@@ -213,23 +222,37 @@ void run_scenario(
         }
 
         const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
+        if (thread_count == 1U) {
+            single_thread_sample_means.push_back(stats.mean_ms());
+        }
+        const double single_thread_mean = static_cast<std::size_t>(sample_index) < single_thread_sample_means.size()
+            ? single_thread_sample_means[static_cast<std::size_t>(sample_index)]
+            : stats.mean_ms();
+        const double speedup = stats.mean_ms() > 0.0 ? single_thread_mean / stats.mean_ms() : 0.0;
         const std::uint32_t effective_workers = simulation.effective_thread_count();
         std::cout << flock3d::bench::model_name(model) << ',' << variant.name << ',' << boid_count << ',' << thread_count << ','
-                  << effective_workers << ',' << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
-                  << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms << ',' << metrics_update_stats.mean_ms() << ",true,"
+                  << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
+                  << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms << ',' << speedup << ','
                   << (variant.social_fov_enabled ? "true" : "false") << ','
-                  << (variant.adaptive_social_radius_enabled ? "true" : "false") << ','
-                  << diagnostics.visible_aggregate_cells_mean_value() << ','
-                  << diagnostics.rejected_aggregate_cells_mean_value() << ','
-                  << diagnostics.aggregate_cells_used_mean_value() << ',' << diagnostics.aggregate_query_radius_mean() << ','
-                  << diagnostics.aggregate_query_radius_min_or_zero() << ',' << diagnostics.aggregate_query_radius_max << ','
-                  << diagnostics.exact_separation_neighbors_mean_value() << ','
-                  << diagnostics.exact_separation_neighbors_max << ',' << diagnostics.social_weight_sum_mean_value() << ','
-                  << diagnostics.flock_spread << ',' << diagnostics.polarization << ',' << parameters.random_seed
-                  << ',' << parameters.world_half_extent << ',' << parameters.neighbor_radius << ','
-                  << parameters.separation_radius << ',' << parameters.max_speed << ',' << parameters.max_force
-                  << ',' << parameters.max_selected_neighbors << ',' << parameters.target_neighbor_count << ','
-                  << (parameters.adaptive_perception_enabled ? "true" : "false") << '\n';
+                  << (variant.adaptive_social_radius_enabled ? "true" : "false");
+        if (flock3d::bench::includes_worker_diagnostics(options.diagnostics_level)) {
+            std::cout << ',' << effective_workers;
+        }
+        if (flock3d::bench::includes_internal_diagnostics(options.diagnostics_level)) {
+            std::cout << ',' << metrics_update_stats.mean_ms() << ",true,"
+                      << diagnostics.visible_aggregate_cells_mean_value() << ','
+                      << diagnostics.rejected_aggregate_cells_mean_value() << ','
+                      << diagnostics.aggregate_cells_used_mean_value() << ',' << diagnostics.aggregate_query_radius_mean() << ','
+                      << diagnostics.aggregate_query_radius_min_or_zero() << ',' << diagnostics.aggregate_query_radius_max << ','
+                      << diagnostics.exact_separation_neighbors_mean_value() << ','
+                      << diagnostics.exact_separation_neighbors_max << ',' << diagnostics.social_weight_sum_mean_value() << ','
+                      << diagnostics.flock_spread << ',' << diagnostics.polarization << ',' << parameters.random_seed
+                      << ',' << parameters.world_half_extent << ',' << parameters.neighbor_radius << ','
+                      << parameters.separation_radius << ',' << parameters.max_speed << ',' << parameters.max_force
+                      << ',' << parameters.max_selected_neighbors << ',' << parameters.target_neighbor_count << ','
+                      << (parameters.adaptive_perception_enabled ? "true" : "false");
+        }
+        std::cout << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -244,19 +267,27 @@ int main(int argc, char** argv)
     const auto models = selected_models(options);
     const auto variants = selected_variants(options);
 
-    std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,worker_count_effective,elapsed_seconds,sample_index,"
-                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,mean_metrics_update_ms,aggregate_social_enabled,social_fov_enabled,"
-                 "adaptive_social_radius_enabled,visible_aggregate_cells_mean,rejected_aggregate_cells_mean,"
-                 "aggregate_cells_used_mean,aggregate_query_radius_mean,aggregate_query_radius_min,"
-                 "aggregate_query_radius_max,exact_separation_neighbors_mean,exact_separation_neighbors_max,"
-                 "social_weight_sum_mean,flock_spread,polarization,random_seed,world_half_extent,neighbor_radius,"
-                 "separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,"
-                 "adaptive_perception_enabled\n";
+    std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
+                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,"
+                 "social_fov_enabled,adaptive_social_radius_enabled";
+    if (flock3d::bench::includes_worker_diagnostics(options.diagnostics_level)) {
+        std::cout << ",worker_count_effective";
+    }
+    if (flock3d::bench::includes_internal_diagnostics(options.diagnostics_level)) {
+        std::cout << ",mean_metrics_update_ms,aggregate_social_enabled,visible_aggregate_cells_mean,"
+                     "rejected_aggregate_cells_mean,aggregate_cells_used_mean,aggregate_query_radius_mean,"
+                     "aggregate_query_radius_min,aggregate_query_radius_max,exact_separation_neighbors_mean,"
+                     "exact_separation_neighbors_max,social_weight_sum_mean,flock_spread,polarization,random_seed,"
+                     "world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,"
+                     "target_neighbor_count,adaptive_perception_enabled";
+    }
+    std::cout << '\n';
     for (const auto model : models) {
         for (const std::uint32_t boid_count : options.boid_counts) {
             for (const AggregateSocialVariant& variant : variants) {
+                std::vector<double> single_thread_sample_means;
                 for (const std::uint32_t thread_count : options.thread_counts) {
-                    run_scenario(model, variant, boid_count, options, progress, thread_count);
+                    run_scenario(model, variant, boid_count, options, progress, thread_count, single_thread_sample_means);
                 }
             }
         }

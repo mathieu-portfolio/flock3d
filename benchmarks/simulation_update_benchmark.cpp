@@ -136,23 +136,26 @@ void run_scenario(
         UpdateStats parallel_dispatch_stats{};
         double parallel_for_calls_total = 0.0;
         double parallel_worker_count_total = 0.0;
+        const bool collect_timing_diagnostics = options.diagnostics_level != flock3d::bench::DiagnosticsLevel::None;
         stats.samples_ms.reserve(sample_ticks);
         const std::size_t sample_start_tick = completed_ticks;
         while (completed_ticks < total_ticks && (stats.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
             flock3d::sim::SimulationTimingDiagnostics timing_diagnostics{};
             const double milliseconds = flock3d::bench::time_ms([&]() {
-                simulation.update(flock3d::bench::fixed_dt, nullptr, &timing_diagnostics);
+                simulation.update(flock3d::bench::fixed_dt, nullptr, collect_timing_diagnostics ? &timing_diagnostics : nullptr);
             });
             stats.record(milliseconds);
-            rebuild_stats.record(timing_diagnostics.rebuild_spatial_hash_ms);
-            model_update_stats.record(timing_diagnostics.model_update_ms);
-            integration_stats.record(timing_diagnostics.integration_ms);
-            metrics_stats.record(timing_diagnostics.metrics_ms);
-            instrumented_update_stats.record(timing_diagnostics.total_update_ms);
-            parallel_workspace_stats.record(timing_diagnostics.parallel_workspace_ms);
-            parallel_dispatch_stats.record(timing_diagnostics.parallel_dispatch_ms);
-            parallel_for_calls_total += static_cast<double>(timing_diagnostics.parallel_for_calls);
-            parallel_worker_count_total += static_cast<double>(timing_diagnostics.parallel_worker_count_total);
+            if (collect_timing_diagnostics) {
+                rebuild_stats.record(timing_diagnostics.rebuild_spatial_hash_ms);
+                model_update_stats.record(timing_diagnostics.model_update_ms);
+                integration_stats.record(timing_diagnostics.integration_ms);
+                metrics_stats.record(timing_diagnostics.metrics_ms);
+                instrumented_update_stats.record(timing_diagnostics.total_update_ms);
+                parallel_workspace_stats.record(timing_diagnostics.parallel_workspace_ms);
+                parallel_dispatch_stats.record(timing_diagnostics.parallel_dispatch_ms);
+                parallel_for_calls_total += static_cast<double>(timing_diagnostics.parallel_for_calls);
+                parallel_worker_count_total += static_cast<double>(timing_diagnostics.parallel_worker_count_total);
+            }
             ++completed_ticks;
 
             const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
@@ -182,19 +185,23 @@ void run_scenario(
         const double parallel_for_calls_mean = stats.count > 0U ? parallel_for_calls_total / static_cast<double>(stats.count) : 0.0;
         const double parallel_worker_count_mean = stats.count > 0U ? parallel_worker_count_total / static_cast<double>(stats.count) : 0.0;
         std::cout << "baseline," << flock3d::bench::model_name(model) << ',' << neighbor_mode.name << ',' << boid_count
-                  << ',' << thread_count << ',' << effective_workers << ',' << boids_per_worker_mean << ','
-                  << boids_per_worker_min << ',' << boids_per_worker_max << ',' << parameters.thread_chunk_size << ','
-                  << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
+                  << ',' << thread_count << ',' << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index
                   << ',' << stats.count << ',' << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms
-                  << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms() << ',' << metrics_stats.mean_ms()
-                  << ',' << rebuild_stats.mean_ms() << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms()
-                  << ',' << metrics_stats.mean_ms() << ',' << instrumented_update_stats.mean_ms()
-                  << ',' << parallel_workspace_stats.mean_ms() << ',' << parallel_dispatch_stats.mean_ms()
-                  << ',' << parallel_for_calls_mean << ',' << parallel_worker_count_mean
                   << ',' << speedup << ',' << parameters.random_seed << ',' << parameters.world_half_extent
                   << ',' << parameters.neighbor_radius << ',' << parameters.separation_radius << ',' << parameters.max_speed
                   << ',' << parameters.max_force << ',' << parameters.max_selected_neighbors << ','
-                  << parameters.target_neighbor_count << ',' << (parameters.adaptive_perception_enabled ? "true" : "false") << '\n';
+                  << parameters.target_neighbor_count << ',' << (parameters.adaptive_perception_enabled ? "true" : "false");
+        if (flock3d::bench::includes_phase_diagnostics(options.diagnostics_level)) {
+            std::cout << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms() << ',' << metrics_stats.mean_ms()
+                      << ',' << rebuild_stats.mean_ms() << ',' << model_update_stats.mean_ms() << ',' << integration_stats.mean_ms()
+                      << ',' << metrics_stats.mean_ms() << ',' << instrumented_update_stats.mean_ms();
+        }
+        if (flock3d::bench::includes_worker_diagnostics(options.diagnostics_level)) {
+            std::cout << ',' << effective_workers << ',' << boids_per_worker_mean << ',' << boids_per_worker_min << ','
+                      << boids_per_worker_max << ',' << parameters.thread_chunk_size << ',' << parallel_workspace_stats.mean_ms()
+                      << ',' << parallel_dispatch_stats.mean_ms() << ',' << parallel_for_calls_mean << ',' << parallel_worker_count_mean;
+        }
+        std::cout << '\n';
         ++sample_index;
     }
     progress.finish();
@@ -210,14 +217,20 @@ int main(int argc, char** argv)
     const auto models = selected_models(options);
     const auto neighbor_modes = selected_neighbor_modes(options);
 
-    std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,"
-                 "boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,chunk_size,elapsed_seconds,sample_index,"
-                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,update_parallel_ms,"
-                 "integration_parallel_ms,serial_metrics_ms,rebuild_spatial_hash_ms,model_update_ms,"
-                 "integration_ms,metrics_ms,instrumented_update_ms,parallel_workspace_ms,parallel_dispatch_ms,"
-                 "parallel_for_calls_mean,parallel_worker_count_mean,speedup_vs_single_thread,random_seed,world_half_extent,"
-                 "neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,"
-                 "adaptive_perception_enabled\n";
+    std::cout << "scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
+                 "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,"
+                 "random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,"
+                 "max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled";
+    if (flock3d::bench::includes_phase_diagnostics(options.diagnostics_level)) {
+        std::cout << ",update_parallel_ms,integration_parallel_ms,serial_metrics_ms,rebuild_spatial_hash_ms,"
+                     "model_update_ms,integration_ms,metrics_ms,instrumented_update_ms";
+    }
+    if (flock3d::bench::includes_worker_diagnostics(options.diagnostics_level)) {
+        std::cout << ",worker_count_effective,boids_per_worker_mean,boids_per_worker_min,boids_per_worker_max,"
+                     "chunk_size,parallel_workspace_ms,parallel_dispatch_ms,parallel_for_calls_mean,"
+                     "parallel_worker_count_mean";
+    }
+    std::cout << '\n';
     for (const auto model : models) {
         for (const std::uint32_t boid_count : options.boid_counts) {
             for (const NeighborMode neighbor_mode : neighbor_modes) {
