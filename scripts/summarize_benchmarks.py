@@ -27,6 +27,7 @@ BENCHMARKS: tuple[SummarySpec, ...] = (
     SummarySpec("metrics", "metrics.csv", ("scenario", "metric_mode"), "mean_ns_per_tick"),
     SummarySpec("noise", "noise.csv", ("scenario", "noise_mode"), "mean_ns_per_tick"),
     SummarySpec("aggregate_social", "aggregate_social.csv", ("scenario", "aggregate_social_mode"), "mean_update_ms"),
+    SummarySpec("render", "render.csv", ("scenario",), "mean_render_ms", iterations_column="frames_in_sample"),
     SummarySpec(
         "simulation_ticks",
         "simulation_ticks.csv",
@@ -143,8 +144,8 @@ def latest_rows(spec: SummarySpec, input_dir: Path) -> list[dict[str, str]]:
                 "ticks_in_sample": row.get("ticks_in_sample", row.get(spec.iterations_column, "")),
                 "primary_metric": spec.primary_metric,
                 "primary_value": row.get(spec.primary_metric, ""),
-                "p95_value": row.get("p95_update_ms", row.get("p95_ms_per_tick", "")),
-                "p99_value": row.get("p99_update_ms", row.get("p99_ms_per_tick", "")),
+                "p95_value": row.get("p95_update_ms", row.get("p95_ms_per_tick", row.get("p95_render_ms", ""))),
+                "p99_value": row.get("p99_update_ms", row.get("p99_ms_per_tick", row.get("p99_render_ms", ""))),
                 "iterations_in_sample": row.get(spec.iterations_column, ""),
             }
         )

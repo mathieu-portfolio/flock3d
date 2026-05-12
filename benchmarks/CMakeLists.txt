@@ -11,6 +11,7 @@ set(flock3d_benchmark_targets
     flock3d_noise_benchmark
     flock3d_aggregate_social_benchmark
     flock3d_simulation_ticks_benchmark
+    flock3d_render_benchmark
 )
 
 add_executable(flock3d_spatial_hash_benchmark
@@ -48,6 +49,12 @@ add_executable(flock3d_simulation_ticks_benchmark
     simulation_ticks_benchmark.hpp
 )
 target_link_libraries(flock3d_simulation_ticks_benchmark PRIVATE flock3d::core)
+
+add_executable(flock3d_render_benchmark
+    render_benchmark.cpp
+    benchmark_common.hpp
+)
+target_link_libraries(flock3d_render_benchmark PRIVATE flock3d::render raylib)
 
 foreach(target IN LISTS flock3d_benchmark_targets)
     flock3d_enable_warnings(${target})
