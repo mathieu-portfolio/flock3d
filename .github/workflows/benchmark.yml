@@ -20,7 +20,7 @@ on:
         description: Optional comma-separated boid counts
         required: false
       thread_counts:
-        description: Optional comma-separated worker thread counts for focused benchmarks
+        description: Optional comma-separated requested worker counts for focused benchmarks; 0 means automatic
         required: false
       scenario:
         description: Optional exact CSV scenario filter; leave blank or use all to keep every row

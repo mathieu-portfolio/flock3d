@@ -123,11 +123,13 @@ TEST_CASE("Common benchmark update stats report latency and throughput metrics",
 
 TEST_CASE("Common benchmark thread count parser deduplicates requested workers", "[benchmark][common][threads]")
 {
-    const auto counts = flock3d::bench::parse_thread_counts("1,2,4,4");
-    REQUIRE(counts.size() == 3U);
-    CHECK(counts[0] == 1U);
-    CHECK(counts[1] == 2U);
-    CHECK(counts[2] == 4U);
+    const auto counts = flock3d::bench::parse_thread_counts("0,1,2,4,4,8");
+    REQUIRE(counts.size() == 5U);
+    CHECK(counts[0] == 0U);
+    CHECK(counts[1] == 1U);
+    CHECK(counts[2] == 2U);
+    CHECK(counts[3] == 4U);
+    CHECK(counts[4] == 8U);
 }
 
 TEST_CASE("Common benchmark list parsers validate comma-separated values", "[benchmark][common][options]")

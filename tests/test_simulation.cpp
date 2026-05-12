@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cmath>
 #include <numbers>
+#include <thread>
 #include <vector>
 
 #include <raylib.h>
@@ -937,22 +938,53 @@ TEST_CASE("BoidSimulation threaded updates match deterministic serial trajectory
     CHECK(trajectory_distance(serial, threaded) == Catch::Approx(0.0).margin(0.0));
 }
 
+TEST_CASE("Automatic thread count policy follows benchmark-informed boid thresholds", "[simulation][threads]")
+{
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(128U) == 1U);
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(256U) == 1U);
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(512U) == 2U);
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(1024U) == 4U);
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(10'000U) <= 4U);
+}
+
+TEST_CASE("Automatic thread count policy respects available hardware when reported", "[simulation][threads]")
+{
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(1024U, 1U) == 1U);
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(1024U, 2U) == 2U);
+    CHECK(flock3d::sim::automatic_thread_count_for_boids(1024U, 8U) == 4U);
+
+    const unsigned int hardware_concurrency = std::thread::hardware_concurrency();
+    if (hardware_concurrency > 0U) {
+        CHECK(flock3d::sim::automatic_thread_count_for_boids(1024U, hardware_concurrency) <= hardware_concurrency);
+    }
+}
+
 TEST_CASE("BoidSimulation thread count policy keeps serial and automatic paths distinct", "[simulation][threads]")
 {
     auto parameters = flock3d::sim::build_scenario(flock3d::sim::ScenarioType::ClassicBoids).simulation_parameters;
 
-    parameters.boid_count = 511U;
+    parameters.boid_count = 128U;
     parameters.thread_count = 0U;
     flock3d::sim::BoidSimulation small_auto{parameters};
     CHECK(small_auto.effective_thread_count() == 1U);
 
+    parameters.boid_count = 256U;
+    flock3d::sim::BoidSimulation another_small_auto{parameters};
+    CHECK(another_small_auto.effective_thread_count() == 1U);
+
     parameters.boid_count = 512U;
     flock3d::sim::BoidSimulation medium_auto{parameters};
-    CHECK(medium_auto.effective_thread_count() == 2U);
+    CHECK(medium_auto.effective_thread_count() == flock3d::sim::automatic_thread_count_for_boids(512U, std::thread::hardware_concurrency()));
 
     parameters.boid_count = 1024U;
     flock3d::sim::BoidSimulation large_auto{parameters};
-    CHECK(large_auto.effective_thread_count() == 4U);
+    CHECK(large_auto.effective_thread_count() == flock3d::sim::automatic_thread_count_for_boids(1024U, std::thread::hardware_concurrency()));
+    CHECK(large_auto.effective_thread_count() <= 4U);
+
+    const unsigned int hardware_concurrency = std::thread::hardware_concurrency();
+    if (hardware_concurrency > 0U) {
+        CHECK(large_auto.effective_thread_count() <= hardware_concurrency);
+    }
 
     parameters.thread_count = 1U;
     flock3d::sim::BoidSimulation serial{parameters};
