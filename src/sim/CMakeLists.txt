@@ -3,6 +3,7 @@ set(flock3d_core_sources
     NeighborSelection.cpp
     Scenario.cpp
     SpatialHash3D.cpp
+    SpatialGrid3D.cpp
 )
 
 set(flock3d_core_headers
@@ -17,6 +18,7 @@ set(flock3d_core_headers
     ${PROJECT_SOURCE_DIR}/include/flock3d/sim/SimulationMetrics.hpp
     ${PROJECT_SOURCE_DIR}/include/flock3d/sim/SimulationParameters.hpp
     ${PROJECT_SOURCE_DIR}/include/flock3d/sim/SpatialHash3D.hpp
+    ${PROJECT_SOURCE_DIR}/include/flock3d/sim/SpatialGrid3D.hpp
 )
 
 add_library(flock3d_core

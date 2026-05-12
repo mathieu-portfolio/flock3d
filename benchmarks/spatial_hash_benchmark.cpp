@@ -11,6 +11,7 @@
 
 #include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/BoidSimulation.hpp>
+#include <flock3d/sim/SpatialGrid3D.hpp>
 #include <flock3d/sim/SpatialHash3D.hpp>
 
 namespace {
@@ -91,8 +92,9 @@ struct SpatialQueryResult {
     std::size_t visited_cells{};
 };
 
+template <typename SpatialIndex>
 SpatialQueryResult count_neighbors_spatial(
-    const flock3d::sim::SpatialHash3D& hash,
+    const SpatialIndex& index,
     const std::vector<Vector3>& positions,
     float radius,
     std::vector<std::size_t>& neighbors)
@@ -100,7 +102,7 @@ SpatialQueryResult count_neighbors_spatial(
     SpatialQueryResult result{};
     for (std::size_t i = 0; i < positions.size(); ++i) {
         flock3d::sim::NeighborQueryDiagnostics diagnostics{};
-        hash.query_neighbors(positions[i], radius, neighbors, diagnostics);
+        index.query_neighbors(positions[i], radius, neighbors, diagnostics);
         result.candidates += diagnostics.candidates_tested;
         result.visited_cells += diagnostics.visited_cells;
         for (const std::size_t neighbor_index : neighbors) {
@@ -125,7 +127,14 @@ flock3d::sim::SimulationParameters scenario_parameters(const SpatialScenario& sc
     return parameters;
 }
 
-void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, const BenchmarkOptions& options, ProgressBar& progress)
+template <typename SpatialIndex, typename RebuildIndex>
+void run_scenario_backend(
+    const SpatialScenario& scenario,
+    std::uint32_t boid_count,
+    const BenchmarkOptions& options,
+    ProgressBar& progress,
+    std::string_view backend_name,
+    RebuildIndex rebuild_index)
 {
     flock3d::sim::BoidSimulation simulation{scenario_parameters(scenario, boid_count)};
     std::vector<std::size_t> neighbors;
@@ -149,17 +158,13 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
         const std::size_t sample_start_tick = completed_ticks;
         while (completed_ticks < total_ticks && (stats.rebuild.count == 0U || completed_ticks - sample_start_tick < sample_ticks)) {
             const auto& positions = simulation.positions();
-            flock3d::sim::SpatialHash3D hash{flock3d::sim::effective_query_radius(simulation.parameters())};
-            const double rebuild_ms = flock3d::bench::time_ms([&hash, &positions]() {
-                for (std::size_t i = 0; i < positions.size(); ++i) {
-                    hash.insert(i, positions[i]);
-                }
-            });
+            SpatialIndex index{flock3d::sim::effective_query_radius(simulation.parameters())};
+            const double rebuild_ms = flock3d::bench::time_ms([&]() { rebuild_index(index, positions); });
             stats.rebuild.record(rebuild_ms);
 
             SpatialQueryResult spatial_result{};
             const double spatial_query_ms = flock3d::bench::time_ms([&]() {
-                spatial_result = count_neighbors_spatial(hash, positions, simulation.parameters().neighbor_radius, neighbors);
+                spatial_result = count_neighbors_spatial(index, positions, simulation.parameters().neighbor_radius, neighbors);
             });
             stats.spatial_query.record(spatial_query_ms);
 
@@ -175,9 +180,9 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
                 static_cast<double>(spatial_result.visited_cells) / query_count,
                 static_cast<double>(spatial_result.effective_neighbors) / query_count,
                 static_cast<double>(naive_neighbors) / query_count,
-                hash.cell_count(),
-                hash.max_cell_occupancy(),
-                hash.average_cell_occupancy(),
+                index.cell_count(),
+                index.max_cell_occupancy(),
+                index.average_cell_occupancy(),
                 spatial_result.effective_neighbors == naive_neighbors);
 
             simulation.update(flock3d::bench::fixed_dt, nullptr);
@@ -185,7 +190,7 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
 
             const double elapsed = flock3d::bench::ticks_to_simulated_seconds(completed_ticks);
             if ((stats.rebuild.count % 16U) == 0U) {
-                progress.update("spatial_hash", scenario.name, boid_count, elapsed, options.duration_seconds);
+                progress.update(backend_name, scenario.name, boid_count, elapsed, options.duration_seconds);
             }
         }
 
@@ -195,7 +200,7 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
         const double sample_wall_seconds = stats.rebuild.wall_seconds() + stats.spatial_query.wall_seconds() + stats.naive_query.wall_seconds();
         const double ticks_per_second = sample_wall_seconds > 0.0 ? static_cast<double>(ticks_in_sample) / sample_wall_seconds : 0.0;
         const double real_time_factor = sample_wall_seconds > 0.0 ? (static_cast<double>(ticks_in_sample) * flock3d::bench::fixed_dt_seconds) / sample_wall_seconds : 0.0;
-        std::cout << scenario.name << ',' << boid_count << ',' << std::fixed << std::setprecision(3) << elapsed << ','
+        std::cout << scenario.name << ',' << backend_name << ',' << boid_count << ',' << std::fixed << std::setprecision(3) << elapsed << ','
                   << sample_index << ',' << stats.rebuild.count << ',' << stats.rebuild.mean_ms() << ','
                   << stats.rebuild.min_or_zero() << ',' << stats.rebuild.max_ms << ',' << stats.spatial_query.mean_ms()
                   << ',' << stats.spatial_query.min_or_zero() << ',' << stats.spatial_query.max_ms << ','
@@ -219,6 +224,36 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
     progress.finish();
 }
 
+void rebuild_hash_index(flock3d::sim::SpatialHash3D& hash, const std::vector<Vector3>& positions)
+{
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        hash.insert(i, positions[i]);
+    }
+}
+
+void rebuild_grid_index(flock3d::sim::SpatialGrid3D& grid, const std::vector<Vector3>& positions)
+{
+    grid.rebuild(positions);
+}
+
+void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, const BenchmarkOptions& options, ProgressBar& progress)
+{
+    run_scenario_backend<flock3d::sim::SpatialHash3D>(
+        scenario,
+        boid_count,
+        options,
+        progress,
+        "spatial_hash",
+        rebuild_hash_index);
+    run_scenario_backend<flock3d::sim::SpatialGrid3D>(
+        scenario,
+        boid_count,
+        options,
+        progress,
+        "spatial_grid",
+        rebuild_grid_index);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -233,7 +268,7 @@ int main(int argc, char** argv)
         {"large_radius", 40.0F, 7.0F, 2.0F},
     };
 
-    std::cout << "scenario,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,visited_cells_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,p99_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,p99_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,p99_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor\n";
+    std::cout << "scenario,backend,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,visited_cells_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,p99_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,p99_spatial_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,p99_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor\n";
     for (const SpatialScenario& scenario : scenarios) {
         for (const std::uint32_t boid_count : options.boid_counts) {
             run_scenario(scenario, boid_count, options, progress);

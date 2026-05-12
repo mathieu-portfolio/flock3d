@@ -64,6 +64,12 @@ Common simulation-parameter overrides are also available when they map directly 
 
 Invalid list entries, booleans, model names, or mode names print usage and fail instead of silently changing the run matrix.
 
+## Spatial-index backend comparison
+
+`flock3d_spatial_hash_benchmark` now emits a `backend` CSV column and runs the production `spatial_hash` backend beside the experimental `spatial_grid` backend for each scenario/count sample. The benchmark keeps the existing timing and occupancy columns, so compare rows with the same scenario, boid count, and sample window when evaluating whether the sparse sorted grid is worth migrating into the simulation path.
+
+The grid backend is validation-only for now: simulation behavior, tuning, rendering, and benchmark workload semantics remain anchored to the existing spatial hash until equivalence tests and benchmark data justify a deliberate switch.
+
 ## Compact CSVs vs diagnostics
 
 Default benchmark CSVs are intentionally compact and stable. Use them for trend comparison in CI, release-to-release checks, and quick local regressions: the default columns identify the scenario/model/mode, boid count, requested thread count, sample window, mean/min/max update cost, speedup versus the matching single-thread sample, and the benchmark-specific workload knobs that make rows comparable.
