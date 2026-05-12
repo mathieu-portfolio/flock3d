@@ -45,7 +45,7 @@ using TimingClock = std::chrono::steady_clock;
     }
 
     const std::uint32_t available = requested == 0U
-        ? automatic_thread_count_for_boids(item_count)
+        ? automatic_thread_count_for_boids(item_count, std::thread::hardware_concurrency())
         : requested;
     return std::max(1U, std::min<std::uint32_t>(available, static_cast<std::uint32_t>(item_count)));
 }

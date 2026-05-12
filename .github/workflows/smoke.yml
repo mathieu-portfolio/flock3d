@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${OUTPUT_DIR}"
           scripts/run_benchmark.sh --preset "${CMAKE_PRESET}" --output-dir "${OUTPUT_DIR}" \
-            --duration 0.1 --sample 0.1 --warmup 0 simulation_update -- --counts 16 --threads 1
+            --duration 0.1 --sample 0.1 --warmup 0 simulation_update -- --counts 16 --threads 0,1
 
       - name: Upload smoke CSV
         uses: actions/upload-artifact@v4

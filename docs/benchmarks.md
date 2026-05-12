@@ -6,11 +6,11 @@ These benchmark executables are for performance diagnosis before optimization. T
 
 Current threaded measurements show useful scaling only up to a conservative number of workers: 2 threads can help around 512 boids, 4 threads is the best default from roughly 1024 through 10k boids, and 8/16 threads are not default yet because they have remained slower than 4 on recent runs. The shrinking gap at larger boid counts suggests fixed scheduling overhead matters less as flocks grow, while memory/cache bandwidth, spatial-hash access locality, false sharing, or serial bookkeeping may become the next bottleneck. GPU work remains out of scope until the CPU path has enough diagnostics to show whether thread scheduling, load imbalance, cache contention, serial metrics, or bandwidth is limiting scaling.
 
-The simulation update path now uses a reusable CPU executor for threaded updates instead of creating worker threads every update, reuses per-worker scratch buffers for neighbor candidates and aggregate-cell work, and keeps `thread_count=1` on the serial path. `thread_count=0` selects a conservative automatic policy based on current benchmark evidence: fewer than 512 boids uses 1 thread, around 512 boids uses 2 threads, and 1024 or more boids uses 4 threads, capped at 4 for now. Manual thread counts are still respected for benchmark investigations.
+The simulation update path now uses a reusable CPU executor for threaded updates instead of creating worker threads every update, reuses per-worker scratch buffers for neighbor candidates and aggregate-cell work, and keeps `thread_count=1` on the serial path. `thread_count=0` selects a conservative automatic policy based on current benchmark evidence: fewer than 512 boids uses 1 thread, 512-1023 boids uses 2 threads, and 1024 or more boids uses 4 threads. The automatic result is capped at 4 and at reported hardware concurrency when available; manual thread counts are still respected for benchmark investigations, including explicit 8+ worker runs.
 
 ## Benchmark sizes
 
-Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks now use compact defaults for quick local iteration: one boid count (`512`), one worker count (`1`), a one-second simulated duration, and a short warm-up. Pass explicit filters when you need a focused matrix, or pass `--full-matrix` to restore the older broad timing window, thread-count, and boid-count defaults (`128`, `256`, `512`, and `1024`). Hardware concurrency is **not** appended automatically; pass `--hardware-threads` when you want to include this machine's `std::thread::hardware_concurrency()` value.
+Current simulations can become slower over time because boids cluster, increasing local neighbor density and the cost of candidate filtering and steering updates. The focused benchmarks now use compact defaults for quick local iteration: one boid count (`512`), the default thread-count sweep (`0`, `1`, `2`, `4`, and `8`), a one-second simulated duration, and a short warm-up. Pass explicit filters when you need a focused matrix, or pass `--full-matrix` to restore the older broad timing window, thread-count (`0`, `1`, `2`, `4`, and `8`) and boid-count defaults (`128`, `256`, `512`, and `1024`). Hardware concurrency is **not** appended automatically; pass `--hardware-threads` when you want to include this machine's `std::thread::hardware_concurrency()` value.
 
 Focused benchmarks advance deterministic fixed simulation ticks as fast as the CPU allows, sample at a regular simulated-time cadence, and print one CSV row per simulated sample window. The configured duration answers “how expensive is simulating X seconds of behavior?” rather than forcing each scenario to run for X wall-clock seconds. CSV output therefore makes simulated time (`elapsed_seconds`/`simulated_seconds` and `simulated_ticks`) separate from measured CPU time (`sample_wall_seconds`/`total_wall_seconds`). Prefer the benchmark-specific primary timing column (`mean_update_ms`, `mean_ns_per_tick`, or `mean_spatial_query_ns_per_tick`) when comparing runs; legacy millisecond columns remain where they make the compact CSV easier to read. Comparing early, middle, and late rows helps identify whether degradation is caused by clustering, spatial hash behavior, neighbor filtering, metrics, model logic, or deterministic noise generation.
 
@@ -40,7 +40,7 @@ The focused benchmarks accept the same lightweight simulated-time and filtering 
 --models BirdFlight,FishSchool      # model/scenario filters where the target supports model selection
 --modes adaptive_radius_closest_k   # benchmark mode filters; names are validated per target
 --counts 512,1024,2048              # comma-separated boid counts; default 512
---threads 1,2,4,8                   # comma-separated CPU worker counts; default 1
+--threads 0,1,2,4,8                 # comma-separated requested CPU worker counts; 0 means automatic; default 0,1,2,4,8
 --hardware-threads                  # append std::thread::hardware_concurrency() explicitly
 --duration seconds                  # simulated duration per scenario; default 1
 --sample seconds                    # simulated CSV sample window length; default 1
@@ -72,7 +72,7 @@ Invalid list entries, booleans, model names, or mode names print usage and fail 
 
 Default benchmark CSVs are intentionally compact and stable. Use them for trend comparison in CI, release-to-release checks, and quick local regressions: the default columns identify the scenario/model/mode, boid count, requested thread count, sample window, mean/min/max update cost, speedup versus the matching single-thread sample, and the benchmark-specific workload knobs that make rows comparable.
 
-Detailed diagnostics are opt-in because timing phases, worker summaries, and internal steering counters make CSVs wide and can add instrumentation work. Pass `--diagnostics phases` to append update phase timings such as `rebuild_spatial_hash_ms`, `model_update_ms`, `integration_ms`, and `metrics_ms`; pass `--diagnostics workers` to append worker/load-balance summaries such as `worker_count_effective`, `boids_per_worker_*`, `parallel_workspace_ms`, `parallel_dispatch_ms`, and `parallel_for_calls_mean`; pass `--diagnostics full` to include both categories plus benchmark-specific internals such as aggregate-social counters. `--profile-level` is accepted as an alias when that wording better matches your workflow.
+Detailed diagnostics are opt-in because timing phases, worker summaries, and internal steering counters make CSVs wide and can add instrumentation work. Pass `--diagnostics phases` to append update phase timings such as `rebuild_spatial_hash_ms`, `model_update_ms`, `integration_ms`, and `metrics_ms`; default CSVs include requested `thread_count` and actual `worker_count_effective`, and `--diagnostics workers` appends additional load-balance summaries such as `boids_per_worker_*`, `parallel_workspace_ms`, `parallel_dispatch_ms`, and `parallel_for_calls_mean`; pass `--diagnostics full` to include both categories plus benchmark-specific internals such as aggregate-social counters. `--profile-level` is accepted as an alias when that wording better matches your workflow.
 
 Diagnostics mode is for investigation after a compact trend run shows an unexpected change. For low-level CPU, cache, branch, allocator, or bandwidth analysis, use an external profiler such as `perf`, Instruments, VTune, Tracy, or platform-native sampling tools; benchmark diagnostics are coarse attribution columns, not a substitute for hardware-counter or call-stack profiling.
 
@@ -105,19 +105,19 @@ scripts/run_benchmark.sh aggregate_social
 For a quick smoke run while changing benchmark code, keep the matrix tiny and shorten the duration and sample window:
 
 ```bash
-scripts/run_benchmark.sh --duration 0.2 --sample 0.1 --warmup 0 simulation_update -- --models ClassicBoids --modes adaptive_radius_closest_k --counts 128 --threads 1
+scripts/run_benchmark.sh --duration 0.2 --sample 0.1 --warmup 0 simulation_update -- --models ClassicBoids --modes adaptive_radius_closest_k --counts 128 --threads 0,1
 ```
 
 For a thread-scaling run, explicitly request only the worker counts and boid counts you want to compare:
 
 ```bash
-scripts/run_benchmark.sh simulation_update -- --models ClassicBoids --modes adaptive_radius_closest_k --counts 512,1024,2048 --threads 1,2,4,8 --duration 2 --sample 0.5
+scripts/run_benchmark.sh simulation_update -- --models ClassicBoids --modes adaptive_radius_closest_k --counts 512,1024,2048 --threads 0,1,2,4,8 --duration 2 --sample 0.5
 ```
 
 For a focused model/mode comparison, combine model and mode filters:
 
 ```bash
-scripts/run_benchmark.sh simulation_update -- --models BirdFlight,FishSchool --modes adaptive_radius_closest_k,aggregate_social --counts 1024 --threads 1,4
+scripts/run_benchmark.sh simulation_update -- --models BirdFlight,FishSchool --modes adaptive_radius_closest_k,aggregate_social --counts 1024 --threads 0,1,4
 ```
 
 For an exhaustive run comparable to the older broad local matrix, opt in explicitly:
@@ -129,15 +129,15 @@ scripts/run_benchmark.sh simulation_update -- --full-matrix
 For a simulation-parameter override run, pass only overrides that correspond to existing simulation parameters:
 
 ```bash
-scripts/run_benchmark.sh aggregate_social -- --models ClassicBoids --modes cell_aggregate_social_adaptive_radius --counts 1024 --threads 1 --seed 12345 --world-size 60 --neighbor-radius 5 --separation-radius 1.5 --max-speed 8 --max-force 10 --max-selected-neighbors 48 --target-neighbor-count 32 --adaptive-perception on --chunk-size 256
+scripts/run_benchmark.sh aggregate_social -- --models ClassicBoids --modes cell_aggregate_social_adaptive_radius --counts 1024 --threads 0,1 --seed 12345 --world-size 60 --neighbor-radius 5 --separation-radius 1.5 --max-speed 8 --max-force 10 --max-selected-neighbors 48 --target-neighbor-count 32 --adaptive-perception on --chunk-size 256
 ```
 
 Use `--preset`, `--output-dir`, or the `FLOCK3D_BENCHMARK_*` environment variables when you need a different build preset, destination directory, or default timing options. Arguments after `--` are forwarded directly to the benchmark executable:
 
 ```bash
 scripts/run_benchmark.sh --preset release-ninja --output-dir outputs/benchmarks/nightly all -- --duration 10
-scripts/run_benchmark.sh simulation_update -- --threads 1,2,4,8 --counts 128,256 --duration 2 --sample 0.5
-scripts/run_benchmark.sh simulation_update -- --hardware-threads --threads 1,2,4
+scripts/run_benchmark.sh simulation_update -- --threads 0,1,2,4,8 --counts 128,256 --duration 2 --sample 0.5
+scripts/run_benchmark.sh simulation_update -- --hardware-threads --threads 0,1,2,4
 ```
 
 ## Plot benchmark output
@@ -227,7 +227,7 @@ Neighbor modes:
 Default columns:
 
 ```text
-scenario,model,neighbor_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
+scenario,model,neighbor_mode,boid_count,thread_count,worker_count_effective,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,random_seed,world_half_extent,neighbor_radius,separation_radius,max_speed,max_force,max_selected_neighbors,target_neighbor_count,adaptive_perception_enabled
 ```
 
 Opt-in diagnostics append phase columns with `--diagnostics phases`, worker/load-balance columns with `--diagnostics workers`, or both with `--diagnostics full`.
@@ -241,16 +241,16 @@ scripts/run_benchmark.sh simulation_update
 For a quick local comparison while tuning neighbor parameters, shorten the run:
 
 ```bash
-scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update -- --threads 1,2,4
+scripts/run_benchmark.sh --duration 0.5 --sample 0.25 --warmup 0 simulation_update -- --threads 0,1,2,4
 ```
 
 Run a scaling comparison for the currently tracked CPU sizes and modes by making the matrix explicit:
 
 ```bash
-scripts/run_benchmark.sh simulation_update -- --models ClassicBoids,BirdFlight,FishSchool,NoiseExperiment --modes fixed_radius_uncapped,fixed_radius_closest_k,adaptive_radius_closest_k,aggregate_social --threads 1,2,4,8,16 --counts 512,1024,2048,5096,10192
+scripts/run_benchmark.sh simulation_update -- --models ClassicBoids,BirdFlight,FishSchool,NoiseExperiment --modes fixed_radius_uncapped,fixed_radius_closest_k,adaptive_radius_closest_k,aggregate_social --threads 0,1,2,4,8 --counts 512,1024,2048,5096,10192
 ```
 
-Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=1` as the deterministic baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, and `speedup_vs_single_thread` across worker counts in the default CSV. When a trend changes unexpectedly, rerun with `--diagnostics phases` to break the full measured update into rebuild (`rebuild_spatial_hash_ms`), model/steering work excluding integration (`update_parallel_ms`/`model_update_ms`), integration (`integration_parallel_ms`/`integration_ms`), metrics bookkeeping (`serial_metrics_ms`/`metrics_ms`), and the internally instrumented total (`instrumented_update_ms`). Rerun with `--diagnostics workers` to add `worker_count_effective`, `boids_per_worker_*`, `parallel_workspace_ms`, `parallel_dispatch_ms`, and parallel-for call summaries. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if worker balance looks good but speedup flattens or regresses as worker count rises, use an external profiler to confirm memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases.
+Threaded rows are generated from fresh simulations with the same seed and parameters. Use `thread_count=0` to measure the automatic benchmark-informed policy and `thread_count=1` as the deterministic serial baseline, then compare `mean_update_ms`, `min_update_ms`, `max_update_ms`, and `speedup_vs_single_thread` across worker counts in the default CSV. When a trend changes unexpectedly, rerun with `--diagnostics phases` to break the full measured update into rebuild (`rebuild_spatial_hash_ms`), model/steering work excluding integration (`update_parallel_ms`/`model_update_ms`), integration (`integration_parallel_ms`/`integration_ms`), metrics bookkeeping (`serial_metrics_ms`/`metrics_ms`), and the internally instrumented total (`instrumented_update_ms`). The default CSV includes `worker_count_effective` (the actual worker count used, distinct from the requested `thread_count`); rerun with `--diagnostics workers` to add `boids_per_worker_*`, `parallel_workspace_ms`, `parallel_dispatch_ms`, and parallel-for call summaries. Try `--chunk-size 64` or `--chunk-size 128` to test whether smaller deterministic chunks help clustered flocks; if worker balance looks good but speedup flattens or regresses as worker count rises, use an external profiler to confirm memory/cache bandwidth, false sharing, spatial-hash locality, or serial phases.
 
 
 
@@ -268,15 +268,15 @@ Compared modes:
 Default columns:
 
 ```text
-scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,social_fov_enabled,adaptive_social_radius_enabled
+scenario,aggregate_social_mode,boid_count,thread_count,worker_count_effective,elapsed_seconds,sample_index,iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,social_fov_enabled,adaptive_social_radius_enabled
 ```
 
-Use `--diagnostics workers` to append the effective worker count. Use `--diagnostics full` when investigating aggregate-social internals such as visible/rejected aggregate cells, exact separation neighbors, social weight sums, flock spread, polarization, and the metrics-update timing collected on the separate diagnostic simulation.
+The default CSV includes the effective worker count. Use `--diagnostics full` when investigating aggregate-social internals such as visible/rejected aggregate cells, exact separation neighbors, social weight sums, flock spread, polarization, and the metrics-update timing collected on the separate diagnostic simulation.
 
 Run it when tuning aggregate social visibility or adaptive-radius behavior:
 
 ```bash
-scripts/run_benchmark.sh aggregate_social -- --modes cell_aggregate_social_no_fov,cell_aggregate_social_adaptive_radius --counts 512,1024 --threads 1,4
+scripts/run_benchmark.sh aggregate_social -- --modes cell_aggregate_social_no_fov,cell_aggregate_social_adaptive_radius --counts 512,1024 --threads 0,1,4
 ```
 
 ### `flock3d_simulation_ticks_benchmark`
