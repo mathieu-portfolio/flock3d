@@ -231,13 +231,10 @@ void run_scenario(
         const double speedup = stats.mean_ms() > 0.0 ? single_thread_mean / stats.mean_ms() : 0.0;
         const std::uint32_t effective_workers = simulation.effective_thread_count();
         std::cout << flock3d::bench::model_name(model) << ',' << variant.name << ',' << boid_count << ',' << thread_count << ','
-                  << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
+                  << effective_workers << ',' << std::fixed << std::setprecision(3) << elapsed << ',' << sample_index << ',' << stats.count << ','
                   << stats.mean_ms() << ',' << stats.min_or_zero() << ',' << stats.max_ms << ',' << speedup << ','
                   << (variant.social_fov_enabled ? "true" : "false") << ','
                   << (variant.adaptive_social_radius_enabled ? "true" : "false");
-        if (flock3d::bench::includes_worker_diagnostics(options.diagnostics_level)) {
-            std::cout << ',' << effective_workers;
-        }
         if (flock3d::bench::includes_internal_diagnostics(options.diagnostics_level)) {
             std::cout << ',' << metrics_update_stats.mean_ms() << ",true,"
                       << diagnostics.visible_aggregate_cells_mean_value() << ','
@@ -267,12 +264,9 @@ int main(int argc, char** argv)
     const auto models = selected_models(options);
     const auto variants = selected_variants(options);
 
-    std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,elapsed_seconds,sample_index,"
+    std::cout << "scenario,aggregate_social_mode,boid_count,thread_count,worker_count_effective,elapsed_seconds,sample_index,"
                  "iterations_in_sample,mean_update_ms,min_update_ms,max_update_ms,speedup_vs_single_thread,"
                  "social_fov_enabled,adaptive_social_radius_enabled";
-    if (flock3d::bench::includes_worker_diagnostics(options.diagnostics_level)) {
-        std::cout << ",worker_count_effective";
-    }
     if (flock3d::bench::includes_internal_diagnostics(options.diagnostics_level)) {
         std::cout << ",mean_metrics_update_ms,aggregate_social_enabled,visible_aggregate_cells_mean,"
                      "rejected_aggregate_cells_mean,aggregate_cells_used_mean,aggregate_query_radius_mean,"

@@ -67,7 +67,7 @@ struct BenchmarkOptions {
     double warmup_seconds{default_warmup_seconds};
     std::optional<std::uint32_t> seed{};
     std::uint32_t thread_chunk_size{0U};
-    std::vector<std::uint32_t> thread_counts{1U};
+    std::vector<std::uint32_t> thread_counts{0U, 1U, 2U, 4U, 8U};
     std::vector<std::uint32_t> boid_counts{512U};
     std::vector<std::string> model_filters{};
     std::vector<std::string> mode_filters{};
@@ -184,7 +184,15 @@ inline void append_hardware_thread_count(std::vector<std::uint32_t>& thread_coun
 
 [[nodiscard]] inline std::vector<std::uint32_t> parse_thread_counts(std::string_view text)
 {
-    return parse_positive_integer_list(text);
+    std::vector<std::uint32_t> values;
+    for (const std::string& token : parse_string_list(text)) {
+        const auto value = parse_u32(token);
+        if (!value.has_value()) {
+            return {};
+        }
+        append_unique(values, *value);
+    }
+    return values;
 }
 
 [[nodiscard]] inline std::vector<std::uint32_t> parse_positive_counts(std::string_view text)
@@ -390,7 +398,7 @@ inline void print_usage(std::string_view executable)
 {
     std::cerr << "Usage: " << executable
               << " [--models ClassicBoids,BirdFlight] [--modes fixed_radius_uncapped,adaptive_radius_closest_k]"
-              << " [--counts 512,1024] [--threads 1,2,4] [--hardware-threads] [--full-matrix]"
+              << " [--counts 512,1024] [--threads 0,1,2,4,8] [--hardware-threads] [--full-matrix]"
               << " [--duration seconds] [--sample seconds] [--warmup seconds] [--seed value] [--chunk-size boids]"
               << " [--diagnostics none|phases|workers|full] [--profile-level none|phases|workers|full]"
               << " [--world-size half-extent] [--neighbor-radius radius] [--perception-radius radius]"
@@ -422,7 +430,7 @@ inline void apply_full_matrix_defaults(BenchmarkOptions& options)
     options.duration_seconds = full_matrix_duration_seconds;
     options.sample_seconds = full_matrix_sample_seconds;
     options.warmup_seconds = full_matrix_warmup_seconds;
-    options.thread_counts = {1U, 2U, 4U, 8U, 16U};
+    options.thread_counts = {0U, 1U, 2U, 4U, 8U};
     options.boid_counts = {128U, 256U, 512U, 1024U};
 }
 
@@ -462,7 +470,7 @@ inline BenchmarkOptions parse_options(int argc, char** argv)
         } else if (argument == "--threads") {
             options.thread_counts = parse_thread_counts(require_value(argc, argv, index, argument));
             if (options.thread_counts.empty()) {
-                fail_usage(argv[0], "--threads must be a comma-separated list of positive integers");
+                fail_usage(argv[0], "--threads must be a comma-separated list of non-negative integers");
             }
         } else if (argument == "--chunk-size") {
             const auto value = parse_u32(require_value(argc, argv, index, argument));

@@ -110,7 +110,7 @@ The repository includes lightweight workflows for remote iteration when you are 
 1. Open the repository in the GitHub mobile app or a mobile browser.
 2. Tap **Actions**, then choose **Benchmarks**.
 3. Tap **Run workflow**.
-4. Pick the benchmark and enter small comma-separated values first, for example `boid_counts=64,128`, `thread_counts=1,2`, `duration_seconds=1`, and `sample_seconds=0.25`.
+4. Pick the benchmark and enter small comma-separated values first, for example `boid_counts=64,128`, `thread_counts=0,1,2,4,8`, `duration_seconds=1`, and `sample_seconds=0.25`.
 5. For advanced simulation overrides, put executable flags in `benchmark_args`, for example `--world-size 60 --adaptive-perception on`.
 6. Optionally set `runner_label` to `self-hosted` if you have a faster machine registered as a GitHub Actions runner.
 7. Start the run, wait for it to finish, then open the run summary and download the `flock3d-benchmarks-*` artifact for CSV files, logs, summaries, and generated plots.

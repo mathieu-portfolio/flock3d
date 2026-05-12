@@ -77,7 +77,7 @@ struct SimulationParameters {
     std::uint32_t thread_chunk_size{0U};
 };
 
-[[nodiscard]] constexpr std::uint32_t automatic_thread_count_for_boids(std::size_t boid_count) noexcept
+[[nodiscard]] constexpr std::uint32_t benchmark_thread_count_for_boids(std::size_t boid_count) noexcept
 {
     if (boid_count < 512U) {
         return 1U;
@@ -86,6 +86,18 @@ struct SimulationParameters {
         return 2U;
     }
     return 4U;
+}
+
+[[nodiscard]] constexpr std::uint32_t automatic_thread_count_for_boids(
+    std::size_t boid_count,
+    std::uint32_t hardware_concurrency = 0U) noexcept
+{
+    std::uint32_t worker_count = benchmark_thread_count_for_boids(boid_count);
+    worker_count = std::clamp(worker_count, 1U, 4U);
+    if (hardware_concurrency > 0U) {
+        worker_count = std::min(worker_count, hardware_concurrency);
+    }
+    return std::max(worker_count, 1U);
 }
 
 [[nodiscard]] constexpr float effective_query_radius(const SimulationParameters& parameters) noexcept
