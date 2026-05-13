@@ -142,6 +142,40 @@ TEST_CASE("SpatialGrid3D returns equivalent deterministic neighbor results",
     }
 }
 
+
+TEST_CASE("SpatialGrid3D visits neighbors without materializing results",
+          "[spatial][grid]")
+{
+    const auto boids = deterministic_fixture();
+    auto indexes = build_indexes(boids);
+
+    std::vector<std::size_t> materialized_neighbors;
+    std::vector<std::size_t> visited_neighbors;
+    flock3d::sim::NeighborQueryDiagnostics materialized_diagnostics{};
+    flock3d::sim::NeighborQueryDiagnostics visitor_diagnostics{};
+
+    indexes.grid.query_neighbors(Vector3{2.0F, 0.5F, 0.0F}, 2.35F,
+                                 materialized_neighbors,
+                                 materialized_diagnostics);
+    indexes.grid.for_each_neighbor(
+        Vector3{2.0F, 0.5F, 0.0F},
+        2.35F,
+        visitor_diagnostics,
+        [&visited_neighbors](std::size_t boid_index) {
+            visited_neighbors.push_back(boid_index);
+        });
+
+    CHECK(visited_neighbors == materialized_neighbors);
+    CHECK(visitor_diagnostics.visited_cells ==
+          materialized_diagnostics.visited_cells);
+    CHECK(visitor_diagnostics.candidates_tested ==
+          materialized_diagnostics.candidates_tested);
+    CHECK(visitor_diagnostics.cell_lookups ==
+          materialized_diagnostics.cell_lookups);
+    CHECK(visitor_diagnostics.occupied_cells ==
+          materialized_diagnostics.occupied_cells);
+}
+
 TEST_CASE("SpatialGrid3D exposes equivalent occupancy diagnostics",
           "[spatial][grid][metrics]")
 {

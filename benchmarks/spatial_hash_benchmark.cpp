@@ -141,6 +141,33 @@ SpatialQueryResult count_neighbors_spatial(
     return result;
 }
 
+
+SpatialQueryResult count_neighbors_spatial(
+    const flock3d::sim::SpatialGrid3D& index,
+    const std::vector<Vector3>& positions,
+    float radius,
+    std::vector<std::size_t>& /*neighbors*/)
+{
+    SpatialQueryResult result{};
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+        flock3d::sim::NeighborQueryDiagnostics diagnostics{};
+        index.for_each_neighbor(
+            positions[i],
+            radius,
+            diagnostics,
+            [&result, i](std::size_t neighbor_index) {
+                if (neighbor_index != i) {
+                    ++result.effective_neighbors;
+                }
+            });
+        result.candidates += diagnostics.candidates_tested;
+        result.visited_cells += diagnostics.visited_cells;
+        result.cell_lookups += diagnostics.cell_lookups;
+        result.occupied_cells += diagnostics.occupied_cells;
+    }
+    return result;
+}
+
 template <typename SpatialIndex>
 SpatialQueryResult count_aggregates_spatial(
     const SpatialIndex& index,

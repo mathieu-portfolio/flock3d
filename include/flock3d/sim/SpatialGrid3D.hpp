@@ -1,10 +1,14 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <utility>
 #include <vector>
 
 #include <raylib.h>
 
+#include <flock3d/math/Vec3.hpp>
 #include <flock3d/sim/SpatialHash3D.hpp>
 
 namespace flock3d::sim {
@@ -26,6 +30,11 @@ public:
     void query_neighbors(Vector3 position, float radius,
                          std::vector<std::size_t>& result,
                          NeighborQueryDiagnostics& diagnostics) const;
+
+    template <typename Callback>
+    void for_each_neighbor(Vector3 position, float radius,
+                           NeighborQueryDiagnostics& diagnostics,
+                           Callback&& callback) const;
 
     [[nodiscard]] std::vector<CellAggregate>
     query_cell_aggregates(Vector3 position, float radius) const;
@@ -81,6 +90,11 @@ private:
     lower_bound_range(CellCoord coord) const noexcept;
     [[nodiscard]] const CellRange* range_for(CellCoord coord) const noexcept;
 
+    template <typename Callback>
+    void for_each_neighbor_impl(Vector3 position, float radius,
+                                NeighborQueryDiagnostics& diagnostics,
+                                Callback&& callback) const;
+
     float cell_size_{};
     std::vector<Entry> entries_{};
     std::vector<CellRange> cell_ranges_{};
@@ -88,5 +102,75 @@ private:
     std::vector<CellAggregate> aggregates_{};
     std::size_t max_cell_occupancy_{};
 };
+
+
+template <typename Callback>
+void SpatialGrid3D::for_each_neighbor(Vector3 position, float radius,
+                                      NeighborQueryDiagnostics& diagnostics,
+                                      Callback&& callback) const
+{
+    for_each_neighbor_impl(position, radius, diagnostics,
+                           std::forward<Callback>(callback));
+}
+
+template <typename Callback>
+void SpatialGrid3D::for_each_neighbor_impl(Vector3 position, float radius,
+                                           NeighborQueryDiagnostics& diagnostics,
+                                           Callback&& callback) const
+{
+    diagnostics = NeighborQueryDiagnostics{};
+    if (radius < 0.0F) {
+        return;
+    }
+
+    const CellCoord center = cell_for(position);
+    const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
+    const float radius_squared = radius * radius;
+    const int min_x = center.x - cell_radius;
+    const int max_x = center.x + cell_radius;
+    const auto side = static_cast<std::size_t>((cell_radius * 2) + 1);
+
+    diagnostics.visited_cells = side * side * side;
+    if (row_spans_.empty()) {
+        return;
+    }
+
+    for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
+        ++diagnostics.cell_lookups;
+        const int min_y = center.y - cell_radius;
+        const int max_y = center.y + cell_radius;
+        for (auto row = lower_bound_row(z, min_y);
+             row != row_spans_.end() && row->z == z && row->y <= max_y;
+             ++row) {
+            auto range = std::lower_bound(
+                cell_ranges_.begin() +
+                    static_cast<std::ptrdiff_t>(row->begin_range),
+                cell_ranges_.begin() +
+                    static_cast<std::ptrdiff_t>(row->end_range),
+                min_x,
+                [](const CellRange& candidate, int x) noexcept {
+                    return candidate.coord.x < x;
+                });
+            const auto row_end = cell_ranges_.begin() +
+                                 static_cast<std::ptrdiff_t>(row->end_range);
+            for (; range != row_end; ++range) {
+                if (range->coord.x > max_x) {
+                    break;
+                }
+                ++diagnostics.occupied_cells;
+                diagnostics.candidates_tested += range->end - range->begin;
+                for (std::size_t entry_index = range->begin;
+                     entry_index < range->end; ++entry_index) {
+                    const Entry& entry = entries_[entry_index];
+                    const Vector3 offset =
+                        math::subtract(entry.position, position);
+                    if (math::length_squared(offset) <= radius_squared) {
+                        callback(entry.boid_index);
+                    }
+                }
+            }
+        }
+    }
+}
 
 } // namespace flock3d::sim
