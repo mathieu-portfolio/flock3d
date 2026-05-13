@@ -40,6 +40,12 @@ namespace {
     };
 }
 
+[[nodiscard]] std::size_t query_cube_cell_count(int cell_radius) noexcept
+{
+    const auto side = static_cast<std::size_t>((cell_radius * 2) + 1);
+    return side * side * side;
+}
+
 [[nodiscard]] bool cell_may_intersect_field_of_view(Vector3 position,
                                                     CellCoord coord,
                                                     float cell_size,
@@ -135,17 +141,22 @@ void SpatialGrid3D::query_neighbors(Vector3 position, float radius,
     const CellCoord center = cell_for(position);
     const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
     const float radius_squared = radius * radius;
+    const int min_x = center.x - cell_radius;
+    const int max_x = center.x + cell_radius;
+
+    diagnostics.visited_cells = query_cube_cell_count(cell_radius);
+    if (cell_ranges_.empty()) {
+        return;
+    }
 
     for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
-            for (int x = center.x - cell_radius; x <= center.x + cell_radius;
-                 ++x) {
-                ++diagnostics.visited_cells;
-                const CellRange* range = range_for(CellCoord{x, y, z});
-                if (range == nullptr) {
-                    continue;
-                }
-
+            ++diagnostics.cell_lookups;
+            auto range = lower_bound_range(CellCoord{min_x, y, z});
+            for (; range != cell_ranges_.end() && range->coord.z == z &&
+                   range->coord.y == y && range->coord.x <= max_x;
+                 ++range) {
+                ++diagnostics.occupied_cells;
                 diagnostics.candidates_tested += range->end - range->begin;
                 for (std::size_t entry_index = range->begin;
                      entry_index < range->end; ++entry_index) {
@@ -189,17 +200,22 @@ void SpatialGrid3D::query_cell_aggregates(
     const CellCoord center = cell_for(position);
     const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
     const float radius_squared = radius * radius;
+    const int min_x = center.x - cell_radius;
+    const int max_x = center.x + cell_radius;
+
+    diagnostics.visited_cells = query_cube_cell_count(cell_radius);
+    if (cell_ranges_.empty()) {
+        return;
+    }
 
     for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
-            for (int x = center.x - cell_radius; x <= center.x + cell_radius;
-                 ++x) {
-                ++diagnostics.visited_cells;
-                const CellRange* range = range_for(CellCoord{x, y, z});
-                if (range == nullptr) {
-                    continue;
-                }
-
+            ++diagnostics.cell_lookups;
+            auto range = lower_bound_range(CellCoord{min_x, y, z});
+            for (; range != cell_ranges_.end() && range->coord.z == z &&
+                   range->coord.y == y && range->coord.x <= max_x;
+                 ++range) {
+                ++diagnostics.occupied_cells;
                 ++diagnostics.candidates_tested;
                 const CellAggregate& aggregate =
                     aggregates_[range->aggregate_index];
@@ -234,11 +250,17 @@ void SpatialGrid3D::query_visible_cell_aggregates(
     const CellCoord center = cell_for(position);
     const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
     const float radius_squared = radius * radius;
+    const int min_x = center.x - cell_radius;
+    const int max_x = center.x + cell_radius;
 
     for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
-            for (int x = center.x - cell_radius; x <= center.x + cell_radius;
-                 ++x) {
+            auto range = cell_ranges_.end();
+            if (!cell_ranges_.empty()) {
+                ++diagnostics.cell_lookups;
+                range = lower_bound_range(CellCoord{min_x, y, z});
+            }
+            for (int x = min_x; x <= max_x; ++x) {
                 const CellCoord coord{x, y, z};
                 if (cull_by_field_of_view &&
                     !cell_may_intersect_field_of_view(
@@ -248,11 +270,16 @@ void SpatialGrid3D::query_visible_cell_aggregates(
                 }
 
                 ++diagnostics.visited_cells;
-                const CellRange* range = range_for(coord);
-                if (range == nullptr) {
+                while (range != cell_ranges_.end() && range->coord.z == z &&
+                       range->coord.y == y && range->coord.x < x) {
+                    ++range;
+                }
+                if (range == cell_ranges_.end() || range->coord.z != z ||
+                    range->coord.y != y || range->coord.x != x) {
                     continue;
                 }
 
+                ++diagnostics.occupied_cells;
                 ++diagnostics.candidates_tested;
                 const CellAggregate& aggregate =
                     aggregates_[range->aggregate_index];
@@ -261,6 +288,7 @@ void SpatialGrid3D::query_visible_cell_aggregates(
                 if (math::length_squared(offset) <= radius_squared) {
                     result.push_back(aggregate);
                 }
+                ++range;
             }
         }
     }
@@ -354,14 +382,20 @@ void SpatialGrid3D::build_ranges_from_entries()
     }
 }
 
+SpatialGrid3D::CellRangeIterator
+SpatialGrid3D::lower_bound_range(CellCoord coord) const noexcept
+{
+    return std::lower_bound(
+        cell_ranges_.begin(), cell_ranges_.end(), coord,
+        [](const CellRange& range, CellCoord value) noexcept {
+            return coord_less(range.coord, value);
+        });
+}
+
 const SpatialGrid3D::CellRange*
 SpatialGrid3D::range_for(CellCoord coord) const noexcept
 {
-    const auto found =
-        std::lower_bound(cell_ranges_.begin(), cell_ranges_.end(), coord,
-                         [](const CellRange& range, CellCoord value) noexcept {
-                             return coord_less(range.coord, value);
-                         });
+    const auto found = lower_bound_range(coord);
     if (found == cell_ranges_.end() || !coord_equal(found->coord, coord)) {
         return nullptr;
     }

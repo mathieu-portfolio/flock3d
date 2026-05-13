@@ -118,11 +118,13 @@ void SpatialHash3D::query_neighbors(
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
             for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
                 ++diagnostics.visited_cells;
+                ++diagnostics.cell_lookups;
                 const auto found = cells_.find(CellCoord{x, y, z});
                 if (found == cells_.end()) {
                     continue;
                 }
 
+                ++diagnostics.occupied_cells;
                 diagnostics.candidates_tested += found->second.entries.size();
                 for (const Entry& entry : found->second.entries) {
                     const auto offset = math::subtract(entry.position, position);
@@ -168,11 +170,13 @@ void SpatialHash3D::query_cell_aggregates(
         for (int y = center.y - cell_radius; y <= center.y + cell_radius; ++y) {
             for (int x = center.x - cell_radius; x <= center.x + cell_radius; ++x) {
                 ++diagnostics.visited_cells;
+                ++diagnostics.cell_lookups;
                 const auto found = cells_.find(CellCoord{x, y, z});
                 if (found == cells_.end()) {
                     continue;
                 }
 
+                ++diagnostics.occupied_cells;
                 ++diagnostics.candidates_tested;
                 const CellAggregate& aggregate = found->second.aggregate;
                 const auto offset = math::subtract(aggregate.centroid, position);
@@ -221,11 +225,13 @@ void SpatialHash3D::query_visible_cell_aggregates(
                 }
 
                 ++diagnostics.visited_cells;
+                ++diagnostics.cell_lookups;
                 const auto found = cells_.find(coord);
                 if (found == cells_.end()) {
                     continue;
                 }
 
+                ++diagnostics.occupied_cells;
                 ++diagnostics.candidates_tested;
                 const CellAggregate& aggregate = found->second.aggregate;
                 const auto offset = math::subtract(aggregate.centroid, position);

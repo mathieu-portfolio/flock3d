@@ -24,6 +24,8 @@ struct CellCoordHash {
 struct NeighborQueryDiagnostics {
     std::size_t visited_cells{};
     std::size_t candidates_tested{};
+    std::size_t cell_lookups{};
+    std::size_t occupied_cells{};
 };
 
 struct CellAggregate {
