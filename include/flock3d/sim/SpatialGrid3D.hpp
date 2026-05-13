@@ -64,7 +64,11 @@ private:
         std::size_t aggregate_index{};
     };
 
+    using CellRangeIterator = std::vector<CellRange>::const_iterator;
+
     void build_ranges_from_entries();
+    [[nodiscard]] CellRangeIterator
+    lower_bound_range(CellCoord coord) const noexcept;
     [[nodiscard]] const CellRange* range_for(CellCoord coord) const noexcept;
 
     float cell_size_{};
