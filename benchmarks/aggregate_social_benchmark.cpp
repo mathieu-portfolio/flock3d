@@ -252,11 +252,14 @@ int main(int argc, char** argv)
                      "target_neighbor_count,adaptive_perception_enabled";
     }
     std::cout << '\n';
+    const std::size_t total_scenarios = models.size() * options.boid_counts.size() * variants.size() * options.thread_counts.size();
+    std::size_t scenario_index = 0U;
     for (const auto model : models) {
         for (const std::uint32_t boid_count : options.boid_counts) {
             for (const AggregateSocialVariant& variant : variants) {
                 std::vector<double> single_thread_sample_means;
                 for (const std::uint32_t thread_count : options.thread_counts) {
+                    progress.set_overall_progress(++scenario_index, total_scenarios);
                     run_scenario(model, variant, boid_count, options, progress, thread_count, single_thread_sample_means);
                 }
             }

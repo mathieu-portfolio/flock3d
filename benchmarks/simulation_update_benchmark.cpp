@@ -207,11 +207,14 @@ int main(int argc, char** argv)
                      "parallel_worker_count_mean";
     }
     std::cout << '\n';
+    const std::size_t total_scenarios = models.size() * options.boid_counts.size() * neighbor_modes.size() * options.thread_counts.size();
+    std::size_t scenario_index = 0U;
     for (const auto model : models) {
         for (const std::uint32_t boid_count : options.boid_counts) {
             for (const NeighborMode neighbor_mode : neighbor_modes) {
                 std::vector<double> single_thread_sample_means;
                 for (const std::uint32_t thread_count : options.thread_counts) {
+                    progress.set_overall_progress(++scenario_index, total_scenarios);
                     run_scenario(model, boid_count, neighbor_mode, options, progress, thread_count, single_thread_sample_means);
                 }
             }

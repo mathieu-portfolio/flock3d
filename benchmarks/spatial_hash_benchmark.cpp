@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <string_view>
 #include <vector>
 
@@ -308,8 +309,15 @@ void rebuild_grid_index(flock3d::sim::SpatialGrid3D& grid, const std::vector<Vec
     grid.rebuild(positions);
 }
 
-void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, const BenchmarkOptions& options, ProgressBar& progress)
+void run_scenario(
+    const SpatialScenario& scenario,
+    std::uint32_t boid_count,
+    const BenchmarkOptions& options,
+    ProgressBar& progress,
+    std::size_t& scenario_index,
+    std::size_t total_scenarios)
 {
+    progress.set_overall_progress(++scenario_index, total_scenarios);
     run_scenario_backend<flock3d::sim::SpatialHash3D>(
         scenario,
         boid_count,
@@ -317,6 +325,7 @@ void run_scenario(const SpatialScenario& scenario, std::uint32_t boid_count, con
         progress,
         "spatial_hash",
         rebuild_hash_index);
+    progress.set_overall_progress(++scenario_index, total_scenarios);
     run_scenario_backend<flock3d::sim::SpatialGrid3D>(
         scenario,
         boid_count,
@@ -341,9 +350,11 @@ int main(int argc, char** argv)
     };
 
     std::cout << "scenario,backend,boid_count,elapsed_seconds,sample_index,iterations_in_sample,mean_rebuild_ms,min_rebuild_ms,max_rebuild_ms,mean_spatial_query_ms,min_spatial_query_ms,max_spatial_query_ms,mean_naive_query_ms,min_naive_query_ms,max_naive_query_ms,candidates_per_query,visited_cells_per_query,cell_lookups_per_query,occupied_lookup_cells_per_query,mean_aggregate_query_ms,min_aggregate_query_ms,max_aggregate_query_ms,aggregate_candidates_per_query,aggregate_visited_cells_per_query,aggregate_cell_lookups_per_query,aggregate_occupied_cells_per_query,aggregate_results_per_query,effective_neighbors_per_query,naive_neighbors_per_query,occupied_cell_count,max_cell_occupancy,average_cell_occupancy,count_mismatches,simulated_seconds,simulated_ticks,ticks_in_sample,sample_wall_seconds,mean_rebuild_ns_per_tick,p50_rebuild_ms,p95_rebuild_ms,p99_rebuild_ms,mean_spatial_query_ns_per_tick,p50_spatial_query_ms,p95_spatial_query_ms,p99_spatial_query_ms,mean_aggregate_query_ns_per_tick,p50_aggregate_query_ms,p95_aggregate_query_ms,p99_aggregate_query_ms,mean_naive_query_ns_per_tick,p50_naive_query_ms,p95_naive_query_ms,p99_naive_query_ms,ticks_per_second,updates_per_second,real_time_factor\n";
+    const std::size_t total_scenarios = std::size(scenarios) * options.boid_counts.size() * 2U;
+    std::size_t scenario_index = 0U;
     for (const SpatialScenario& scenario : scenarios) {
         for (const std::uint32_t boid_count : options.boid_counts) {
-            run_scenario(scenario, boid_count, options, progress);
+            run_scenario(scenario, boid_count, options, progress, scenario_index, total_scenarios);
         }
     }
 

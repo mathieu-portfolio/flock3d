@@ -30,6 +30,14 @@ TEST_CASE("Benchmark progress environment mode can override terminal detection",
     CHECK_FALSE(flock3d::bench::progress_enabled_for_mode("unexpected", false));
 }
 
+TEST_CASE("Benchmark progress counter formats completed scenarios", "[benchmark][progress]")
+{
+    CHECK(flock3d::bench::format_progress_counter(1U, 16U) == "1/16");
+    CHECK(flock3d::bench::format_progress_counter(16U, 16U) == "16/16");
+    CHECK(flock3d::bench::format_progress_counter(17U, 16U) == "16/16");
+    CHECK(flock3d::bench::format_progress_counter(1U, 0U).empty());
+}
+
 TEST_CASE("Common benchmark windows convert simulated seconds to fixed ticks", "[benchmark][common]")
 {
     CHECK(flock3d::bench::simulated_seconds_to_ticks(0.0) == 0U);
