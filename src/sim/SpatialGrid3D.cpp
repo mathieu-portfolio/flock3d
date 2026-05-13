@@ -95,6 +95,7 @@ SpatialGrid3D::SpatialGrid3D(float cell_size) : cell_size_{cell_size}
 void SpatialGrid3D::clear()
 {
     entries_.clear();
+    query_entries_.clear();
     cell_ranges_.clear();
     row_spans_.clear();
     aggregates_.clear();
@@ -113,7 +114,9 @@ void SpatialGrid3D::rebuild(const std::vector<Vector3>& positions,
                             const std::vector<Vector3>& velocities)
 {
     entries_.clear();
+    query_entries_.clear();
     entries_.reserve(positions.size());
+    query_entries_.reserve(positions.size());
     for (std::size_t i = 0; i < positions.size(); ++i) {
         const Vector3 velocity =
             i < velocities.size() ? velocities[i] : Vector3{};
@@ -351,6 +354,12 @@ void SpatialGrid3D::build_ranges_from_entries()
                          }
                          return left.boid_index < right.boid_index;
                      });
+
+    query_entries_.clear();
+    query_entries_.reserve(entries_.size());
+    for (const Entry& entry : entries_) {
+        query_entries_.push_back(QueryEntry{entry.boid_index, entry.position});
+    }
 
     cell_ranges_.clear();
     row_spans_.clear();
