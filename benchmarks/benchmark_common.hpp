@@ -692,11 +692,25 @@ inline bool progress_enabled() noexcept
     return progress_enabled_for_mode(progress_mode != nullptr ? std::string_view{progress_mode} : std::string_view{}, auto_enabled);
 }
 
+[[nodiscard]] inline std::string format_progress_counter(std::size_t current, std::size_t total)
+{
+    if (total == 0U) {
+        return {};
+    }
+    return std::to_string(std::min(current, total)) + "/" + std::to_string(total);
+}
+
 class ProgressBar {
 public:
     explicit ProgressBar(bool enabled) noexcept
         : enabled_{enabled}
     {
+    }
+
+    void set_overall_progress(std::size_t current, std::size_t total) noexcept
+    {
+        overall_current_ = current;
+        overall_total_ = total;
     }
 
     void update(std::string_view benchmark, std::string_view scenario, std::size_t boid_count, double elapsed, double target)
@@ -708,14 +722,18 @@ public:
         const int percent = static_cast<int>(std::round(ratio * 100.0));
         constexpr int width = 20;
         const int filled = static_cast<int>(std::round(ratio * static_cast<double>(width)));
+        const std::string overall_progress = format_progress_counter(overall_current_, overall_total_);
 
         std::cerr << '\r' << '[';
         for (int index = 0; index < width; ++index) {
             std::cerr << (index < filled ? '#' : '-');
         }
-        std::cerr << "] " << std::setw(3) << percent << "% | " << benchmark << " | " << scenario << " | "
-                  << boid_count << " boids | " << std::fixed << std::setprecision(1) << elapsed << " simulated s / "
-                  << target << " simulated s" << std::flush;
+        std::cerr << "] " << std::setw(3) << percent << '%';
+        if (!overall_progress.empty()) {
+            std::cerr << " | " << overall_progress;
+        }
+        std::cerr << " | " << benchmark << " | " << scenario << " | " << boid_count << " boids | " << std::fixed
+                  << std::setprecision(1) << elapsed << " simulated s / " << target << " simulated s" << std::flush;
     }
 
     void finish()
@@ -727,6 +745,8 @@ public:
 
 private:
     bool enabled_{};
+    std::size_t overall_current_{};
+    std::size_t overall_total_{};
 };
 
 inline SimulationParameters base_parameters(std::uint32_t boid_count, std::uint32_t seed)
