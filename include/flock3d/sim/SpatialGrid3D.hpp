@@ -66,6 +66,11 @@ private:
         Vector3 velocity{};
     };
 
+    struct QueryEntry {
+        std::size_t boid_index{};
+        Vector3 position{};
+    };
+
     struct CellRange {
         CellCoord coord{};
         std::size_t begin{};
@@ -97,6 +102,7 @@ private:
 
     float cell_size_{};
     std::vector<Entry> entries_{};
+    std::vector<QueryEntry> query_entries_{};
     std::vector<CellRange> cell_ranges_{};
     std::vector<RowSpan> row_spans_{};
     std::vector<CellAggregate> aggregates_{};
@@ -161,7 +167,7 @@ void SpatialGrid3D::for_each_neighbor_impl(Vector3 position, float radius,
                 diagnostics.candidates_tested += range->end - range->begin;
                 for (std::size_t entry_index = range->begin;
                      entry_index < range->end; ++entry_index) {
-                    const Entry& entry = entries_[entry_index];
+                    const QueryEntry& entry = query_entries_[entry_index];
                     const Vector3 offset =
                         math::subtract(entry.position, position);
                     if (math::length_squared(offset) <= radius_squared) {
