@@ -143,58 +143,10 @@ void SpatialGrid3D::query_neighbors(Vector3 position, float radius,
                                     NeighborQueryDiagnostics& diagnostics) const
 {
     result.clear();
-    diagnostics = NeighborQueryDiagnostics{};
-    if (radius < 0.0F) {
-        return;
-    }
-
-    const CellCoord center = cell_for(position);
-    const int cell_radius = static_cast<int>(std::ceil(radius / cell_size_));
-    const float radius_squared = radius * radius;
-    const int min_x = center.x - cell_radius;
-    const int max_x = center.x + cell_radius;
-
-    diagnostics.visited_cells = query_cube_cell_count(cell_radius);
-    if (row_spans_.empty()) {
-        return;
-    }
-
-    for (int z = center.z - cell_radius; z <= center.z + cell_radius; ++z) {
-        ++diagnostics.cell_lookups;
-        const int min_y = center.y - cell_radius;
-        const int max_y = center.y + cell_radius;
-        for (auto row = lower_bound_row(z, min_y);
-             row != row_spans_.end() && row->z == z && row->y <= max_y;
-             ++row) {
-            auto range = std::lower_bound(
-                cell_ranges_.begin() +
-                    static_cast<std::ptrdiff_t>(row->begin_range),
-                cell_ranges_.begin() +
-                    static_cast<std::ptrdiff_t>(row->end_range),
-                min_x,
-                [](const CellRange& candidate, int x) noexcept {
-                    return candidate.coord.x < x;
-                });
-            const auto row_end = cell_ranges_.begin() +
-                                 static_cast<std::ptrdiff_t>(row->end_range);
-            for (; range != row_end; ++range) {
-                if (range->coord.x > max_x) {
-                    break;
-                }
-                ++diagnostics.occupied_cells;
-                diagnostics.candidates_tested += range->end - range->begin;
-                for (std::size_t entry_index = range->begin;
-                     entry_index < range->end; ++entry_index) {
-                    const Entry& entry = entries_[entry_index];
-                    const Vector3 offset =
-                        math::subtract(entry.position, position);
-                    if (math::length_squared(offset) <= radius_squared) {
-                        result.push_back(entry.boid_index);
-                    }
-                }
-            }
-        }
-    }
+    for_each_neighbor(position, radius, diagnostics,
+                      [&result](std::size_t boid_index) {
+                          result.push_back(boid_index);
+                      });
 }
 
 std::vector<CellAggregate>
