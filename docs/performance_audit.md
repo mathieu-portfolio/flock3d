@@ -11,7 +11,7 @@ A 60 FPS frame has **16.67 ms** of wall-clock time. A practical laptop target sh
 | 60 FPS rendering only | 16.67 ms/frame | 10-14 ms render+app | Leaves room for input and jitter. |
 | 60 Hz simulation, one tick per rendered frame | 16.67 ms/tick | 6-10 ms average, <=12-14 ms p95 | Required if sim and render run on the same thread without catch-up pressure. |
 | 120 Hz simulation with 60 FPS rendering | 8.33 ms/tick, two ticks/frame | 3-5 ms/tick | Two updates plus rendering must still fit a frame. |
-| 240 Hz simulation stretch | 4.17 ms/tick | 1.5-2.5 ms/tick | Only realistic for smaller counts, reduced behavior, or GPU/compute approaches. |
+| 240 Hz simulation stretch | 4.17 ms/tick | 1.5-2.5 ms/tick | Only realistic for smaller counts, reduced behavior, or a separate research plan. |
 
 The application currently uses a fixed-timestep accumulator that can execute multiple simulation updates per rendered frame, capped at eight updates. That prevents unbounded spiral-of-death behavior, but a large flock that exceeds the per-frame budget will either reduce visual frame rate or repeatedly hit the catch-up cap.
 
@@ -48,6 +48,12 @@ boids * visited_cells + boids * candidates_per_query + selected_neighbor_process
 
 Benchmark-backed: late-window slowdowns correlate with spatial-query diagnostics such as occupancy and candidate counts in the benchmark output. Likely hypothesis: clustering is a major cause when dense cells are scanned repeatedly. Adaptive/bounded modes reduce selected-neighbor work, and aggregate social steering lowers social-neighbor detail, but exact local separation and candidate scans can still dominate dense regions.
 
+### SpatialGrid3D outcome
+
+Benchmark-backed: `SpatialGrid3D` was a useful experimental sparse sorted-grid backend, but it should not be switched into production simulation yet. It successfully reduced fixed lookup overhead and improved sparse/small-radius query cases. However, after lookup and materialization costs were reduced, dense and large-radius workloads remained limited by candidate traversal and rebuild trade-offs. For this project's current workload, `SpatialHash3D` remains the better production backend.
+
+The practical follow-up is to stop investing near-term effort in additional neighbor-grid patches. Performance work should instead focus on simulation-level optimizations, aggregate-social specialization, clearer benchmark presentation, and general C++/architecture polish.
+
 ### Memory layout and cache locality
 
 Code-review hypothesis: the core boid arrays are reasonably cache-friendly structure-of-arrays vectors for positions, velocities, and accelerations, but the spatial hash is less cache-friendly. It uses `std::unordered_map<CellCoord, Cell>`, each `Cell` owns a vector of entries, and query loops perform many hash lookups while walking neighboring cell coordinates, so pointer chasing and scattered memory access are likely contributors at large counts.
@@ -71,7 +77,7 @@ The current automatic policy caps at four workers, which matches the observed tr
 
 Code-review risk, not yet render-benchmark-backed: rendering may become a dominant bottleneck before or near 10k boids in the interactive raylib app. The current renderer issues four 3D triangle draw calls per boid: 20,000 `DrawTriangle3D` calls for 5k boids and 40,000 for 10k, plus per-boid basis construction. Until a render-only benchmark exists, treat this as a high-probability risk rather than a measured limit.
 
-If render-only measurements confirm this risk, large-count rendering should move toward batched or instanced meshes, lower-detail impostors/points for distance, or a GPU-side particle/mesh path.
+If render-only measurements confirm this risk, large-count rendering should move toward batched or instanced meshes, lower-detail impostors/points for distance, and clearer presentation of measured limits.
 
 ### Benchmark instrumentation overhead
 
@@ -97,8 +103,7 @@ Recommended 5k target envelope:
 
 A credible 10k CPU-first target would require:
 
-- a cache-friendly spatial grid or sorted cell ranges instead of `unordered_map` cells;
-- reduced candidate scanning under clustering;
+- reduced candidate scanning under clustering without assuming a backend rewrite;
 - one-pass or fused update/integration where correctness allows;
 - stable worker chunking tuned by measured load balance;
 - app metrics sampled at a lower rate;
@@ -106,7 +111,7 @@ A credible 10k CPU-first target would require:
 
 ### Much larger scales
 
-**Much larger than 10k is outside the comfortable range of the current CPU/raylib-immediate design.** With local interactions, larger scales need either stronger approximations or a GPU-oriented pipeline. CPU-only can go further with data-oriented grids, SIMD, LOD, and approximate aggregate fields, but tens or hundreds of thousands of visually smooth agents are better treated as a GPU compute/rendering project with a separate validation strategy.
+**Much larger than 10k is outside the comfortable range of the current CPU/raylib-immediate design.** With local interactions, larger scales need stronger approximations, lower-detail presentation, or a separate research plan. For this portfolio milestone, keep the focus on measured CPU simulation improvements and rendering presentation rather than opening another backend rewrite.
 
 ## Highest-impact roadmap
 
@@ -120,17 +125,16 @@ A credible 10k CPU-first target would require:
 
 These are useful, but they will not by themselves make 10k/60 robust.
 
-### Data-oriented CPU improvements
+### Simulation-level CPU improvements
 
-1. Replace `unordered_map<CellCoord, Cell>` with a dense or sorted spatial grid for the wrapped world: compute cell indices, sort boid indices by cell, and store contiguous cell ranges.
-2. Build cell aggregates in contiguous arrays and query by integer cell ranges without hash lookups.
-3. Separate exact local separation from approximate social steering: exact within small separation cells, aggregate or bounded K for alignment/cohesion.
-4. Track and cap worst-case candidate scans in clustered cells, not just selected-neighbor counts.
-5. Consider SIMD-friendly distance/FOV filtering over contiguous candidate spans.
-6. Evaluate fusing phases or double-buffering state to reduce repeated passes and synchronization.
-7. Make metrics a sampled subsystem rather than per-tick app work for large counts.
+1. Specialize aggregate-social paths where aggregate alignment/cohesion can reduce exact-neighbor pressure.
+2. Separate exact local separation from broader social steering where behavior remains clear and measurable.
+3. Track and cap worst-case candidate scans in clustered cells, not just selected-neighbor counts.
+4. Evaluate fusing phases or double-buffering state to reduce repeated passes and synchronization.
+5. Make metrics a sampled subsystem rather than per-tick app work for large counts.
+6. Improve benchmark presentation so lookup, candidate traversal, rebuild, and aggregate costs are easy to compare.
 
-These are the likely highest-impact changes for laptop CPU simulation.
+These are the likely highest-impact changes for laptop CPU simulation now that the `SpatialGrid3D` backend experiment is frozen.
 
 ### Rendering optimizations
 
@@ -141,10 +145,6 @@ These are the likely highest-impact changes for laptop CPU simulation.
 5. Benchmark render-only frame time separately from simulation-only update time.
 
 Rendering should be measured before claiming 5k or 10k interactive success, because headless simulation benchmarks do not cover that risk.
-
-### GPU/compute-oriented approaches
-
-GPU compute is not a small refactor of the current deterministic CPU path. It would require GPU-resident SoA buffers, GPU spatial binning or sort, compute kernels for neighbor/aggregate steering, synchronization with rendering buffers, and a tolerance-based validation strategy. It becomes the right approach when the target moves beyond 10k/60 with rich behavior, or when higher simulation rates are required at 10k+.
 
 ## Recommended validation plan
 
@@ -157,4 +157,4 @@ GPU compute is not a small refactor of the current deterministic CPU path. It wo
 
 ## Bottom line
 
-The current architecture is on the right path for **several thousand CPU-simulated boids**, especially with adaptive/bounded neighbor selection and moderate threading. **5k/60 is a reasonable near-term target**, but should not be claimed until render-only and full-app p95 measurements pass. **10k/60 remains a stretch goal** until spatial queries become more data-oriented and rendering is batched or otherwise proven affordable. **Much larger scales** should be planned as approximate CPU LOD or GPU compute/rendering work rather than incremental tuning of the current `unordered_map` spatial hash and immediate-mode renderer.
+The current architecture is on the right path for **several thousand CPU-simulated boids**, especially with adaptive/bounded neighbor selection and moderate threading. **5k/60 is a reasonable near-term target**, but should not be claimed until render-only and full-app p95 measurements pass. **10k/60 remains a stretch goal** until simulation-level costs are reduced and rendering is batched or otherwise proven affordable. **Much larger scales** should be planned as approximate CPU LOD, presentation changes, or a separate research plan rather than incremental neighbor-grid tuning.
