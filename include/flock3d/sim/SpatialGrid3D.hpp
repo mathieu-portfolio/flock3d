@@ -64,9 +64,19 @@ private:
         std::size_t aggregate_index{};
     };
 
+    struct RowSpan {
+        int z{};
+        int y{};
+        std::size_t begin_range{};
+        std::size_t end_range{};
+    };
+
     using CellRangeIterator = std::vector<CellRange>::const_iterator;
+    using RowSpanIterator = std::vector<RowSpan>::const_iterator;
 
     void build_ranges_from_entries();
+    void build_row_spans_from_ranges();
+    [[nodiscard]] RowSpanIterator lower_bound_row(int z, int y) const noexcept;
     [[nodiscard]] CellRangeIterator
     lower_bound_range(CellCoord coord) const noexcept;
     [[nodiscard]] const CellRange* range_for(CellCoord coord) const noexcept;
@@ -74,6 +84,7 @@ private:
     float cell_size_{};
     std::vector<Entry> entries_{};
     std::vector<CellRange> cell_ranges_{};
+    std::vector<RowSpan> row_spans_{};
     std::vector<CellAggregate> aggregates_{};
     std::size_t max_cell_occupancy_{};
 };
