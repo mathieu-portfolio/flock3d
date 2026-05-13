@@ -199,6 +199,25 @@ TEST_CASE("SpatialGrid3D queries aggregate cells like SpatialHash3D",
     check_diagnostics_equal(grid_diagnostics, hash_diagnostics);
 }
 
+TEST_CASE("SpatialGrid3D query diagnostics count sparse row-span lookups",
+          "[spatial][grid][metrics]")
+{
+    const auto boids = deterministic_fixture();
+    auto indexes = build_indexes(boids);
+
+    std::vector<std::size_t> neighbors;
+    flock3d::sim::NeighborQueryDiagnostics diagnostics{};
+
+    indexes.grid.query_neighbors(Vector3{0.0F, 0.0F, 0.0F}, 1.0F,
+                                 neighbors, diagnostics);
+
+    CHECK(neighbors == indexes.hash.query_neighbors(Vector3{0.0F, 0.0F, 0.0F},
+                                                     1.0F));
+    CHECK(diagnostics.visited_cells == 27U);
+    CHECK(diagnostics.cell_lookups == 3U);
+    CHECK(diagnostics.occupied_cells == 4U);
+}
+
 TEST_CASE("SpatialGrid3D visible aggregate queries match SpatialHash3D",
           "[spatial][grid][aggregates]")
 {
